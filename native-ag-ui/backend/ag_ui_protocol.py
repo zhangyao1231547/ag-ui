@@ -53,207 +53,108 @@ class BaseEvent:
         return json.dumps(self.to_dict(), ensure_ascii=False)
 
 @dataclass
-class TextMessageStartEvent:
+class TextMessageStartEvent(BaseEvent):
     """文本消息开始事件"""
-    event_type: str
-    message_id: str
+    message_id: str = ''
     role: str = 'assistant'
-    timestamp: float = None
     
     def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = time.time()
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-    
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False)
+        super().__post_init__()
     
 @dataclass
-class TextMessageContentEvent:
+class TextMessageContentEvent(BaseEvent):
     """文本消息内容事件"""
-    event_type: str
-    message_id: str
-    content: str
-    timestamp: float = None
-    
-    def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = time.time()
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-    
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False)
-    
-@dataclass
-class TextMessageEndEvent:
-    """文本消息结束事件"""
-    event_type: str
-    message_id: str
+    message_id: str = ''
     content: str = ''
-    timestamp: float = None
     
     def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = time.time()
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-    
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False)
+        super().__post_init__()
     
 @dataclass
-class ToolCallStartEvent:
-    """工具调用开始事件"""
-    event_type: str
-    call_id: str
-    tool_name: str
-    arguments: Dict[str, Any] = None
-    timestamp: float = None
+class TextMessageEndEvent(BaseEvent):
+    """文本消息结束事件"""
+    message_id: str = ''
+    content: str = ''
     
     def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = time.time()
+        super().__post_init__()
+    
+@dataclass
+class ToolCallStartEvent(BaseEvent):
+    """工具调用开始事件"""
+    call_id: str = ''
+    tool_name: str = ''
+    arguments: Dict[str, Any] = None
+    
+    def __post_init__(self):
+        super().__post_init__()
         if self.arguments is None:
             self.arguments = {}
     
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-    
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False)
-    
 @dataclass
-class ToolCallEndEvent:
+class ToolCallEndEvent(BaseEvent):
     """工具调用结束事件"""
-    event_type: str
-    call_id: str
+    call_id: str = ''
     result: Any = None
-    timestamp: float = None
     
     def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = time.time()
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-    
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False)
+        super().__post_init__()
     
 @dataclass
-class StateSnapshotEvent:
+class StateSnapshotEvent(BaseEvent):
     """状态快照事件"""
-    event_type: str
     state: Dict[str, Any] = None
-    timestamp: float = None
     
     def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = time.time()
+        super().__post_init__()
         if self.state is None:
             self.state = {}
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-    
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False)
 
 
 @dataclass
-class StateDeltaEvent:
+class StateDeltaEvent(BaseEvent):
     """状态增量事件"""
-    event_type: str
     delta: Dict[str, Any] = None
-    timestamp: float = None
     
     def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = time.time()
+        super().__post_init__()
         if self.delta is None:
             self.delta = {}
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-    
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False)
 
 @dataclass
-class RunStartedEvent:
+class RunStartedEvent(BaseEvent):
     """运行开始事件"""
-    event_type: str
-    run_id: str
-    timestamp: float = None
+    run_id: str = ''
     
     def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = time.time()
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-    
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False)
+        super().__post_init__()
 
 @dataclass
-class RunFinishedEvent:
+class RunFinishedEvent(BaseEvent):
     """运行完成事件"""
-    event_type: str
-    run_id: str
-    timestamp: float = None
+    run_id: str = ''
     
     def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = time.time()
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-    
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False)
+        super().__post_init__()
 
 @dataclass
-class RunErrorEvent:
+class RunErrorEvent(BaseEvent):
     """运行错误事件"""
-    event_type: str
-    run_id: str
-    error: str
-    timestamp: float = None
+    run_id: str = ''
+    error: str = ''
     
     def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = time.time()
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-    
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False)
+        super().__post_init__()
 
 @dataclass
-class CustomEvent:
+class CustomEvent(BaseEvent):
     """自定义事件"""
-    event_type: str
     data: Dict[str, Any] = None
-    timestamp: float = None
     
     def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = time.time()
+        super().__post_init__()
         if self.data is None:
             self.data = {}
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-    
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False)
 
 
 class AGUIProtocol:
@@ -273,8 +174,8 @@ class AGUIProtocol:
     def emit_event(self, event: BaseEvent) -> str:
         """发送事件"""
         # 处理事件
-        if event.type in self.event_handlers:
-            for handler in self.event_handlers[event.type]:
+        if event.event_type in self.event_handlers:
+            for handler in self.event_handlers[event.event_type]:
                 handler(event)
         
         # 更新内部状态
@@ -293,31 +194,31 @@ class AGUIProtocol:
             TextMessageEndEvent(event_type=EventType.TEXT_MESSAGE_END, message_id=message_id)
         ]
     
-    async def emit_text_message_start(self, message_id: str, role: str = 'assistant') -> None:
+    def emit_text_message_start(self, message_id: str, role: str = 'assistant') -> None:
         """发送文本消息开始事件"""
         event = TextMessageStartEvent(
             event_type=EventType.TEXT_MESSAGE_START,
             message_id=message_id,
             role=role
         )
-        await self.emit_event(EventType.TEXT_MESSAGE_START, event.to_dict())
+        self.emit_event(event)
     
-    async def emit_text_message_content(self, message_id: str, content: str) -> None:
+    def emit_text_message_content(self, message_id: str, content: str) -> None:
         """发送文本消息内容事件"""
         event = TextMessageContentEvent(
             event_type=EventType.TEXT_MESSAGE_CONTENT,
             message_id=message_id,
             content=content
         )
-        await self.emit_event(EventType.TEXT_MESSAGE_CONTENT, event.to_dict())
+        self.emit_event(event)
     
-    async def emit_text_message_end(self, message_id: str) -> None:
+    def emit_text_message_end(self, message_id: str) -> None:
         """发送文本消息结束事件"""
         event = TextMessageEndEvent(
             event_type=EventType.TEXT_MESSAGE_END,
             message_id=message_id
         )
-        await self.emit_event(EventType.TEXT_MESSAGE_END, event.to_dict())
+        self.emit_event(event)
     
     def create_tool_call_events(self, tool_call_id: str, tool_name: str, 
                                args: Dict[str, Any], result: Any) -> List[Any]:

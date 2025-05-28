@@ -177,13 +177,30 @@ class WebSocketConnection:
                 return None
             
             self.buffer += data
-            payload = WebSocketFrame.parse_frame(self.buffer)
             
-            if payload is not None:
-                self.buffer = b''  # 清空缓冲区
-                return payload.decode('utf-8')
-            
-            return None
+            # 尝试解析完整的WebSocket帧
+            try:
+                payload = WebSocketFrame.parse_frame(self.buffer)
+                
+                if payload is not None:
+                    # 成功解析到完整帧，清空缓冲区
+                    self.buffer = b''
+                    # 安全地解码UTF-8，处理不完整的字节序列
+                    try:
+                        return payload.decode('utf-8')
+                    except UnicodeDecodeError as decode_error:
+                        print(f"UTF-8解码错误: {decode_error}")
+                        print(f"原始数据: {payload[:50]}...")  # 只打印前50字节
+                        # 尝试使用错误处理策略
+                        return payload.decode('utf-8', errors='replace')
+                else:
+                    # 帧不完整，继续等待更多数据
+                    return None
+            except Exception as parse_error:
+                print(f"WebSocket帧解析错误: {parse_error}")
+                # 清空缓冲区避免持续错误
+                self.buffer = b''
+                return None
             
         except Exception as e:
             print(f"接收消息失败: {e}")
@@ -202,8 +219,9 @@ class WebSocketConnection:
 class WebSocketHandler:
     """WebSocket处理器"""
     
-    def __init__(self, ag_ui_protocol: AGUIProtocol):
+    def __init__(self, ag_ui_protocol: AGUIProtocol, agent_simulator=None):
         self.ag_ui_protocol = ag_ui_protocol
+        self.agent_simulator = agent_simulator
         self.connections: List[WebSocketConnection] = []
         self.message_handlers: Dict[str, Callable] = {}
         
@@ -307,8 +325,12 @@ class WebSocketHandler:
         
         await self.broadcast_event(user_message_event)
         
-        # 模拟智能体响应（这里可以集成真实的AI模型）
-        await self._simulate_agent_response(content)
+        # 使用真实的AI模型响应
+        if self.agent_simulator:
+            await self._process_with_agent(content)
+        else:
+            # 如果没有agent_simulator，使用模拟响应
+            await self._simulate_agent_response(content)
     
     async def _handle_get_state(self, connection: WebSocketConnection, data: Dict):
         """处理获取状态请求"""
@@ -318,6 +340,21 @@ class WebSocketHandler:
             'timestamp': int(asyncio.get_event_loop().time() * 1000)
         }
         await connection.send_message(json.dumps(state_event, ensure_ascii=False))
+    
+    async def _process_with_agent(self, user_input: str):
+        """使用AgentSimulator处理用户消息"""
+        try:
+            print(f"🤖 开始处理用户消息: {user_input}")
+            
+            # 调用agent_simulator处理消息（该方法会通过协议发送事件，无返回值）
+            await self.agent_simulator.process_user_message(user_input)
+            
+            print(f"🤖 AI响应处理完成")
+            
+        except Exception as e:
+            print(f"❌ 处理AI响应时出错: {e}")
+            # 发送错误响应
+            await self._simulate_agent_response(f"抱歉，处理您的消息时出现了错误: {str(e)}")
     
     async def _simulate_agent_response(self, user_input: str):
         """模拟智能体响应"""

@@ -13,6 +13,7 @@ import os
 from urllib.parse import urlparse, parse_qs
 from ag_ui_protocol import AGUIProtocol
 from websocket_handler import WebSocketHandler
+from agent_simulator import AgentSimulator
 
 
 class HTTPServer:
@@ -22,8 +23,63 @@ class HTTPServer:
         self.host = host
         self.port = port
         self.ag_ui_protocol = AGUIProtocol()
-        self.websocket_handler = WebSocketHandler(self.ag_ui_protocol)
+        self.agent_simulator = AgentSimulator(self.ag_ui_protocol)
+        self.websocket_handler = WebSocketHandler(self.ag_ui_protocol, self.agent_simulator)
         self.running = False
+        
+        # 注册AG-UI协议事件处理器，将事件转发到WebSocket
+        self._setup_event_handlers()
+    
+    def _setup_event_handlers(self):
+        """设置AG-UI协议事件处理器"""
+        # 注册所有事件类型的处理器，将事件转发到WebSocket
+        from ag_ui_protocol import EventType
+        
+        def forward_to_websocket(event):
+            """将AG-UI事件转发到WebSocket"""
+            try:
+                # 将事件转换为字典格式并异步广播
+                event_dict = {
+                    'type': event.event_type.value,
+                    'timestamp': event.timestamp
+                }
+                
+                # 根据事件类型添加特定字段
+                if hasattr(event, 'message_id'):
+                    event_dict['message_id'] = event.message_id
+                if hasattr(event, 'role'):
+                    event_dict['role'] = event.role
+                if hasattr(event, 'content'):
+                    event_dict['content'] = event.content
+                if hasattr(event, 'call_id'):
+                    event_dict['call_id'] = event.call_id
+                if hasattr(event, 'tool_name'):
+                    event_dict['tool_name'] = event.tool_name
+                if hasattr(event, 'arguments'):
+                    event_dict['arguments'] = event.arguments
+                if hasattr(event, 'result'):
+                    event_dict['result'] = event.result
+                if hasattr(event, 'state'):
+                    event_dict['state'] = event.state
+                if hasattr(event, 'delta'):
+                    event_dict['delta'] = event.delta
+                if hasattr(event, 'data'):
+                    event_dict['data'] = event.data
+                
+                # 创建异步任务来广播事件
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                    loop.create_task(self.websocket_handler.broadcast_event(event_dict))
+                except RuntimeError:
+                    # 如果没有运行的事件循环，创建一个新的
+                    asyncio.create_task(self.websocket_handler.broadcast_event(event_dict))
+            except Exception as e:
+                print(f"❌ 转发事件到WebSocket时出错: {e}")
+        
+        # 为所有事件类型注册处理器
+        for event_type in EventType:
+            self.ag_ui_protocol.register_handler(event_type, forward_to_websocket)
     
     def start(self):
         """启动服务器"""

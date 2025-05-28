@@ -602,16 +602,15 @@ function handleTextMessageStart(event) {
     console.log('📝 文本消息开始:', event);
     hideTypingIndicator();
     
-    // 创建新消息
-    const message = {
+    // 记录消息信息，但不立即创建DOM元素
+    // 等到收到第一个内容块时再创建，避免显示空消息
+    window.pendingMessage = {
         id: event.message_id,
         role: event.role || 'assistant',
         content: '',
         timestamp: event.timestamp || Date.now(),
         streaming: true
     };
-    
-    addMessage(message);
 }
 
 /**
@@ -619,7 +618,17 @@ function handleTextMessageStart(event) {
  */
 function handleTextMessageContent(event) {
     console.log('📝 文本消息内容:', event);
-    updateMessageContent(event.message_id, event.content || '', true);
+    
+    // 检查是否有待处理的消息（第一个内容块）
+    if (window.pendingMessage && window.pendingMessage.id === event.message_id) {
+        // 第一个内容块，创建消息元素
+        window.pendingMessage.content = event.content || '';
+        addMessage(window.pendingMessage);
+        window.pendingMessage = null; // 清除待处理消息
+    } else {
+        // 后续内容块，追加到现有消息
+        updateMessageContent(event.message_id, event.content || '', true);
+    }
 }
 
 /**
@@ -627,6 +636,14 @@ function handleTextMessageContent(event) {
  */
 function handleTextMessageEnd(event) {
     console.log('📝 文本消息结束:', event);
+    
+    // 处理边界情况：如果消息结束时还有待处理的消息（没有收到任何内容块）
+    if (window.pendingMessage && window.pendingMessage.id === event.message_id) {
+        // 创建空消息（虽然不理想，但保持消息完整性）
+        window.pendingMessage.content = '(无内容)';
+        addMessage(window.pendingMessage);
+        window.pendingMessage = null;
+    }
     
     // 移除流式指示器
     const messageElement = elements.messagesContainer?.querySelector(`[data-message-id="${event.message_id}"]`);

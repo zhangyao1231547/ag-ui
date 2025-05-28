@@ -12,7 +12,14 @@ import time
 import os
 from typing import Dict, List, Any, Optional
 from openai import OpenAI
-from ag_ui_protocol import AGUIProtocol, EventType
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
+from ag_ui_protocol import (
+    AGUIProtocol, EventType, TextMessageContentEvent, TextMessageEndEvent,
+    ToolCallStartEvent, ToolCallEndEvent, StateSnapshotEvent, CustomEvent
+)
 
 class AgentSimulator:
     """AI代理模拟器"""
@@ -29,10 +36,15 @@ class AgentSimulator:
         }
         
         # 初始化通义千问客户端
-        self.qwen_client = OpenAI(
-            api_key=os.getenv("DASHSCOPE_API_KEY"),
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        )
+        api_key = os.getenv("DASHSCOPE_API_KEY")
+        if api_key:
+            self.qwen_client = OpenAI(
+                api_key=api_key,
+                base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            )
+        else:
+            print("⚠️ DASHSCOPE_API_KEY 未配置，将使用模板响应")
+            self.qwen_client = None
         
         # 预定义的响应模板
         self.response_templates = {
@@ -113,7 +125,7 @@ class AgentSimulator:
         self.agent_state['status'] = 'processing'
         
         # 发送状态更新
-        await self._send_state_update()
+        self._send_state_update()
         
         # 分析消息并生成响应
         response_type = self._analyze_message(message)
@@ -125,7 +137,7 @@ class AgentSimulator:
         
         # 更新状态为就绪
         self.agent_state['status'] = 'ready'
-        await self._send_state_update()
+        self._send_state_update()
     
     def _analyze_message(self, message: str) -> str:
         """分析消息类型"""
@@ -153,7 +165,7 @@ class AgentSimulator:
             
             print(f"🔄 正在调用通义千问API生成响应...")
             # 使用通义千问生成响应
-            response_content = await self._generate_qwen_response(message, response_type)
+            response_content = self._generate_qwen_response(message, response_type)
             print(f"✅ 通义千问API调用成功")
         except Exception as e:
             print(f"⚠️ 通义千问API调用失败: {e}")
@@ -172,7 +184,7 @@ class AgentSimulator:
         message_id = f"assistant_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
         
         # 发送消息开始事件
-        await self.protocol.emit_text_message_start(
+        self.protocol.emit_text_message_start(
             message_id=message_id,
             role='assistant'
         )
@@ -187,21 +199,16 @@ class AgentSimulator:
                 current_content += " "
             
             # 发送内容块
-            await self.protocol.emit_event(EventType.TEXT_MESSAGE_CONTENT, {
-                'message_id': message_id,
-                'content': word + (" " if i < len(words) - 1 else ""),
-                'timestamp': time.time()
-            })
+            self.protocol.emit_text_message_content(
+                message_id=message_id,
+                content=word + (" " if i < len(words) - 1 else "")
+            )
             
             # 模拟打字延迟
             await asyncio.sleep(random.uniform(0.05, 0.15))
         
         # 发送消息结束事件
-        await self.protocol.emit_event(EventType.TEXT_MESSAGE_END, {
-            'message_id': message_id,
-            'content': current_content,
-            'timestamp': time.time()
-        })
+        self.protocol.emit_text_message_end(message_id=message_id)
         
         # 记录助手消息
         self.conversation_history.append({
@@ -223,12 +230,13 @@ class AgentSimulator:
         # 发送工具调用开始事件
         call_id = f"call_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
         
-        await self.protocol.emit_event(EventType.TOOL_CALL_START, {
-            'call_id': call_id,
-            'tool_name': tool_name,
-            'arguments': tool_args,
-            'timestamp': time.time()
-        })
+        event = ToolCallStartEvent(
+            event_type=EventType.TOOL_CALL_START,
+            call_id=call_id,
+            tool_name=tool_name,
+            arguments=tool_args
+        )
+        self.protocol.emit_event(event)
         
         # 模拟工具执行延迟
         await asyncio.sleep(random.uniform(0.5, 1.5))
@@ -237,12 +245,12 @@ class AgentSimulator:
         tool_result = await self._execute_tool(tool_name, tool_args)
         
         # 发送工具调用结果事件
-        await self.protocol.emit_event(EventType.TOOL_CALL_END, {
-            'call_id': call_id,
-            'tool_name': tool_name,
-            'result': tool_result,
-            'timestamp': time.time()
-        })
+        event = ToolCallEndEvent(
+            event_type=EventType.TOOL_CALL_END,
+            call_id=call_id,
+            result=tool_result
+        )
+        self.protocol.emit_event(event)
         
         # 基于工具结果生成响应
         response = self._generate_tool_response(tool_name, tool_result)
@@ -358,21 +366,26 @@ class AgentSimulator:
         
         return f"工具 {tool_name} 执行完成，结果：{json.dumps(tool_result, ensure_ascii=False, indent=2)}"
     
-    async def _generate_qwen_response(self, message: str, response_type: str) -> str:
+    def _generate_qwen_response(self, message: str, response_type: str) -> str:
         """使用通义千问生成响应"""
+        if not self.qwen_client:
+            raise Exception("通义千问客户端未初始化")
+            
         # 构建系统提示
-        system_prompt = "你是AG-UI智能助手，一个基于AG-UI协议的AI助手。你需要：\n1. 提供有用、准确的回答\n2. 保持友好和专业的语调\n3. 根据用户需求提供相应的帮助\n4. 支持中文对话"
+        system_prompt = """
+你是一个友好、专业的AI助手，名叫AG-UI助手。你的任务是：
+1. 理解用户的问题和需求
+2. 提供准确、有用的回答
+3. 保持友好和专业的语调
+4. 如果不确定答案，诚实地说明
+
+请用中文回答，除非用户明确要求使用其他语言。
+"""
         
-        # 根据响应类型调整系统提示
-        if response_type == 'greeting':
-            system_prompt += "\n当前是问候场景，请友好地打招呼并介绍你的功能。"
-        elif response_type == 'help':
-            system_prompt += "\n当前是帮助场景，请详细介绍你的功能和能力。"
-        elif response_type == 'tool_demo':
-            system_prompt += "\n当前是工具演示场景，请介绍可用的工具功能。"
-        
-        # 构建对话历史
-        messages = [{"role": "system", "content": system_prompt}]
+        # 构建消息列表
+        messages = [
+            {"role": "system", "content": system_prompt}
+        ]
         
         # 添加最近的对话历史（最多5轮）
         recent_history = self.conversation_history[-10:] if len(self.conversation_history) > 10 else self.conversation_history
@@ -388,16 +401,12 @@ class AgentSimulator:
         print(f"📤 发送到通义千问的消息数量: {len(messages)}")
         print(f"📤 最后一条用户消息: {message[:50]}...")
         
-        # 在异步环境中调用同步的OpenAI客户端
-        loop = asyncio.get_event_loop()
-        completion = await loop.run_in_executor(
-            None,
-            lambda: self.qwen_client.chat.completions.create(
-                model="qwen-plus",
-                messages=messages,
-                temperature=0.7,
-                max_tokens=1000
-            )
+        # 直接调用同步的OpenAI客户端
+        completion = self.qwen_client.chat.completions.create(
+            model="qwen-plus",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1000
         )
         
         response_content = completion.choices[0].message.content
@@ -406,13 +415,16 @@ class AgentSimulator:
         
         return response_content
     
-    async def _send_state_update(self) -> None:
+    def _send_state_update(self) -> None:
         """发送状态更新"""
-        await self.protocol.emit_event(EventType.STATE_SNAPSHOT, {
-            'agent_state': self.agent_state.copy(),
-            'conversation_length': len(self.conversation_history),
-            'timestamp': time.time()
-        })
+        event = StateSnapshotEvent(
+            event_type=EventType.STATE_SNAPSHOT,
+            state={
+                'agent_state': self.agent_state.copy(),
+                'conversation_length': len(self.conversation_history)
+            }
+        )
+        self.protocol.emit_event(event)
     
     async def get_state(self) -> Dict[str, Any]:
         """获取当前状态"""
@@ -429,14 +441,17 @@ class AgentSimulator:
         self.agent_state['status'] = 'ready'
         self.agent_state['last_activity'] = time.time()
         
-        await self._send_state_update()
+        self._send_state_update()
         
         # 发送重置通知
-        await self.protocol.emit_event(EventType.CUSTOM, {
-            'event_type': 'conversation_reset',
-            'message': '对话已重置',
-            'timestamp': time.time()
-        })
+        event = CustomEvent(
+            event_type=EventType.CUSTOM,
+            data={
+                'event_type': 'conversation_reset',
+                'message': '对话已重置'
+            }
+        )
+        self.protocol.emit_event(event)
     
     async def simulate_periodic_updates(self) -> None:
         """模拟周期性更新"""
@@ -444,12 +459,15 @@ class AgentSimulator:
             await asyncio.sleep(30)  # 每30秒发送一次心跳
             
             # 发送心跳事件
-            await self.protocol.emit_event(EventType.CUSTOM, {
-                'event_type': 'heartbeat',
-                'agent_status': self.agent_state['status'],
-                'uptime': time.time() - self.agent_state.get('start_time', time.time()),
-                'timestamp': time.time()
-            })
+            event = CustomEvent(
+                event_type=EventType.CUSTOM,
+                data={
+                    'event_type': 'heartbeat',
+                    'agent_status': self.agent_state['status'],
+                    'uptime': time.time() - self.agent_state.get('start_time', time.time())
+                }
+            )
+            self.protocol.emit_event(event)
     
     def start_periodic_updates(self) -> None:
         """启动周期性更新任务"""
