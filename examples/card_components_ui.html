@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AG-UI 卡片组件动态渲染示例</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn.primary {
+            background: #4CAF50;
+            border-color: #45a049;
+        }
+
+        .btn.danger {
+            background: #f44336;
+            border-color: #da190b;
+        }
+
+        .status {
+            color: white;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .status.connected {
+            background: rgba(76, 175, 80, 0.8);
+        }
+
+        .status.disconnected {
+            background: rgba(244, 67, 54, 0.8);
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .card.pending {
+            border-left: 4px solid #ff9800;
+        }
+
+        .card.completed {
+            border-left: 4px solid #4CAF50;
+        }
+
+        .card.error {
+            border-left: 4px solid #f44336;
+        }
+
+        .card.executing {
+            border-left: 4px solid #2196F3;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .card-status {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .card-status.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .card-status.completed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .card-status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .card-status.executing {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .card-content {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+
+        .card-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #999;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #eee;
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            transition: width 0.3s ease;
+            border-radius: 2px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .logs {
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ff00;
+            border-radius: 10px;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            line-height: 1.4;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+        }
+
+        .log-timestamp {
+            color: #888;
+            margin-right: 10px;
+        }
+
+        .log-type {
+            color: #ffff00;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 AG-UI 卡片组件动态渲染</h1>
+            <p>基于AG-UI协议的实时状态管理和UI渲染示例</p>
+        </div>
+
+        <div class="controls">
+            <button class="btn primary" onclick="cardRenderer.connect()">连接服务器</button>
+            <button class="btn danger" onclick="cardRenderer.disconnect()">断开连接</button>
+            <button class="btn" onclick="cardRenderer.simulateTaskFlow()">模拟任务流程</button>
+            <button class="btn" onclick="cardRenderer.simulateStateUpdate()">模拟状态更新</button>
+            <button class="btn" onclick="cardRenderer.clearCards()">清空卡片</button>
+            <div class="status" id="connectionStatus">未连接</div>
+        </div>
+
+        <div class="cards-grid" id="cardsContainer">
+            <!-- 动态生成的卡片将在这里显示 -->
+        </div>
+
+        <div class="logs" id="eventLogs">
+            <div class="log-entry">
+                <span class="log-timestamp">[系统]</span>
+                <span class="log-type">INFO</span>
+                AG-UI 卡片渲染器已初始化
+            </div>
+        </div>
+    </div>
+
+    <script src="../native-ag-ui/frontend/ag-ui-client.js"></script>
+    <script>
+        /**
+         * AG-UI 卡片组件渲染器
+         * 基于AG-UI协议实现动态卡片组件的事件处理和UI渲染
+         */
+        class CardRenderer {
+            constructor() {
+                this.client = new AGUIClient({
+                    host: 'localhost',
+                    port: 8000,
+                    autoReconnect: true
+                });
+                
+                this.cards = new Map();
+                this.taskCounter = 0;
+                
+                this.setupEventHandlers();
+                this.setupUIElements();
+                
+                this.log('INFO', 'CardRenderer 初始化完成');
+            }
+            
+            setupEventHandlers() {
+                // 连接状态事件
+                this.client.on('connected', () => {
+                    this.updateConnectionStatus('connected');
+                    this.log('SUCCESS', '已连接到AG-UI服务器');
+                });
+                
+                this.client.on('disconnected', () => {
+                    this.updateConnectionStatus('disconnected');
+                    this.log('WARNING', '与AG-UI服务器断开连接');
+                });
+                
+                this.client.on('error', (data) => {
+                    this.log('ERROR', `连接错误: ${data.error}`);
+                });
+                
+                // AG-UI协议事件处理
+                this.client.onEvent('STATE_SNAPSHOT', (event) => {
+                    this.handleStateSnapshot(event);
+                });
+                
+                this.client.onEvent('STATE_DELTA', (event) => {
+                    this.handleStateDelta(event);
+                });
+                
+                this.client.onEvent('TOOL_CALL_START', (event) => {
+                    this.handleToolCallStart(event);
+                });
+                
+                this.client.onEvent('TOOL_CALL_END', (event) => {
+                    this.handleToolCallEnd(event);
+                });
+                
+                this.client.onEvent('TEXT_MESSAGE_START', (event) => {
+                    this.handleTextMessageStart(event);
+                });
+                
+                this.client.onEvent('TEXT_MESSAGE_CONTENT', (event) => {
+                    this.handleTextMessageContent(event);
+                });
+                
+                this.client.onEvent('TEXT_MESSAGE_END', (event) => {
+                    this.handleTextMessageEnd(event);
+                });
+                
+                this.client.onEvent('STEP_STARTED', (event) => {
+                    this.handleStepStarted(event);
+                });
+                
+                this.client.onEvent('STEP_FINISHED', (event) => {
+                    this.handleStepFinished(event);
+                });
+            }
+            
+            setupUIElements() {
+                this.cardsContainer = document.getElementById('cardsContainer');
+                this.connectionStatus = document.getElementById('connectionStatus');
+                this.eventLogs = document.getElementById('eventLogs');
+            }
+            
+            // 连接管理
+            connect() {
+                this.client.connect();
+            }
+            
+            disconnect() {
+                this.client.disconnect();
+            }
+            
+            updateConnectionStatus(status) {
+                this.connectionStatus.textContent = status === 'connected' ? '已连接' : '未连接';
+                this.connectionStatus.className = `status ${status}`;
+            }
+            
+            // 事件处理器
+            handleStateSnapshot(event) {
+                this.log('EVENT', `状态快照: ${JSON.stringify(event.state)}`);
+                
+                // 根据状态快照更新所有卡片
+                if (event.state.cards) {
+                    this.renderCardsFromState(event.state.cards);
+                }
+            }
+            
+            handleStateDelta(event) {
+                this.log('EVENT', `状态增量: ${JSON.stringify(event.delta)}`);
+                
+                // 根据状态增量更新特定卡片
+                if (event.delta.cards) {
+                    this.updateCardsFromDelta(event.delta.cards);
+                }
+            }
+            
+            handleToolCallStart(event) {
+                this.log('TOOL', `工具调用开始: ${event.tool_name}`);
+                
+                const cardData = {
+                    id: event.call_id,
+                    title: `🔧 ${event.tool_name}`,
+                    content: `正在执行工具: ${event.tool_name}`,
+                    status: 'executing',
+                    type: 'tool_call',
+                    timestamp: new Date().toLocaleTimeString(),
+                    progress: 0
+                };
+                
+                this.createCard(cardData);
+            }
+            
+            handleToolCallEnd(event) {
+                this.log('TOOL', `工具调用结束: ${event.call_id}`);
+                
+                const card = this.cards.get(event.call_id);
+                if (card) {
+                    card.status = 'completed';
+                    card.content = `工具执行完成\n结果: ${JSON.stringify(event.result, null, 2)}`;
+                    card.progress = 100;
+                    this.updateCard(card);
+                }
+            }
+            
+            handleTextMessageStart(event) {
+                this.log('MESSAGE', `消息开始: ${event.message_id}`);
+                
+                const cardData = {
+                    id: event.message_id,
+                    title: `💬 ${event.role} 消息`,
+                    content: '正在生成消息...',
+                    status: 'executing',
+                    type: 'message',
+                    timestamp: new Date().toLocaleTimeString(),
+                    progress: 0
+                };
+                
+                this.createCard(cardData);
+            }
+            
+            handleTextMessageContent(event) {
+                const card = this.cards.get(event.message_id);
+                if (card) {
+                    card.content = event.content;
+                    card.progress = Math.min(card.progress + 20, 90);
+                    this.updateCard(card);
+                }
+            }
+            
+            handleTextMessageEnd(event) {
+                this.log('MESSAGE', `消息结束: ${event.message_id}`);
+                
+                const card = this.cards.get(event.message_id);
+                if (card) {
+                    card.status = 'completed';
+                    card.progress = 100;
+                    this.updateCard(card);
+                }
+            }
+            
+            handleStepStarted(event) {
+                this.log('STEP', `步骤开始: ${event.step_name}`);
+                
+                const cardData = {
+                    id: `step_${event.step_id}`,
+                    title: `📋 ${event.step_name}`,
+                    content: event.description || '执行中...',
+                    status: 'executing',
+                    type: 'step',
+                    timestamp: new Date().toLocaleTimeString(),
+                    progress: 0
+                };
+                
+                this.createCard(cardData);
+            }
+            
+            handleStepFinished(event) {
+                this.log('STEP', `步骤完成: ${event.step_id}`);
+                
+                const card = this.cards.get(`step_${event.step_id}`);
+                if (card) {
+                    card.status = event.success ? 'completed' : 'error';
+                    card.content = event.result || card.content;
+                    card.progress = 100;
+                    this.updateCard(card);
+                }
+            }
+            
+            // 卡片渲染方法
+            createCard(cardData) {
+                this.cards.set(cardData.id, cardData);
+                
+                const cardElement = this.createCardElement(cardData);
+                cardElement.classList.add('fade-in');
+                
+                this.cardsContainer.appendChild(cardElement);
+                
+                this.log('UI', `创建卡片: ${cardData.title}`);
+            }
+            
+            updateCard(cardData) {
+                const cardElement = document.getElementById(`card_${cardData.id}`);
+                if (cardElement) {
+                    // 更新卡片内容
+                    const titleElement = cardElement.querySelector('.card-title');
+                    const statusElement = cardElement.querySelector('.card-status');
+                    const contentElement = cardElement.querySelector('.card-content');
+                    const progressElement = cardElement.querySelector('.progress-fill');
+                    
+                    if (titleElement) titleElement.textContent = cardData.title;
+                    if (statusElement) {
+                        statusElement.textContent = cardData.status;
+                        statusElement.className = `card-status ${cardData.status}`;
+                    }
+                    if (contentElement) contentElement.textContent = cardData.content;
+                    if (progressElement) {
+                        progressElement.style.width = `${cardData.progress}%`;
+                    }
+                    
+                    // 更新卡片样式
+                    cardElement.className = `card ${cardData.status}`;
+                    
+                    this.log('UI', `更新卡片: ${cardData.title}`);
+                }
+            }
+            
+            createCardElement(cardData) {
+                const card = document.createElement('div');
+                card.className = `card ${cardData.status}`;
+                card.id = `card_${cardData.id}`;
+                
+                card.innerHTML = `
+                    <div class="card-header">
+                        <div class="card-title">${cardData.title}</div>
+                        <div class="card-status ${cardData.status}">${cardData.status}</div>
+                    </div>
+                    <div class="card-content">${cardData.content}</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${cardData.progress}%"></div>
+                    </div>
+                    <div class="card-meta">
+                        <span>类型: ${cardData.type}</span>
+                        <span>${cardData.timestamp}</span>
+                    </div>
+                `;
+                
+                return card;
+            }
+            
+            renderCardsFromState(cardsState) {
+                // 清空现有卡片
+                this.cardsContainer.innerHTML = '';
+                this.cards.clear();
+                
+                // 根据状态渲染卡片
+                Object.entries(cardsState).forEach(([id, cardData]) => {
+                    cardData.id = id;
+                    this.createCard(cardData);
+                });
+            }
+            
+            updateCardsFromDelta(cardsDelta) {
+                Object.entries(cardsDelta).forEach(([id, updates]) => {
+                    const existingCard = this.cards.get(id);
+                    if (existingCard) {
+                        // 更新现有卡片
+                        Object.assign(existingCard, updates);
+                        this.updateCard(existingCard);
+                    } else {
+                        // 创建新卡片
+                        updates.id = id;
+                        this.createCard(updates);
+                    }
+                });
+            }
+            
+            // 模拟方法
+            simulateTaskFlow() {
+                this.log('SIMULATE', '开始模拟任务流程');
+                
+                const taskId = `task_${++this.taskCounter}`;
+                
+                // 模拟步骤开始
+                setTimeout(() => {
+                    this.handleStepStarted({
+                        step_id: `${taskId}_1`,
+                        step_name: '数据收集',
+                        description: '正在收集用户数据...'
+                    });
+                }, 500);
+                
+                // 模拟工具调用
+                setTimeout(() => {
+                    this.handleToolCallStart({
+                        call_id: `${taskId}_tool`,
+                        tool_name: 'data_processor'
+                    });
+                }, 1500);
+                
+                // 模拟消息生成
+                setTimeout(() => {
+                    this.handleTextMessageStart({
+                        message_id: `${taskId}_msg`,
+                        role: 'assistant'
+                    });
+                }, 2500);
+                
+                // 模拟完成
+                setTimeout(() => {
+                    this.handleStepFinished({
+                        step_id: `${taskId}_1`,
+                        success: true,
+                        result: '数据收集完成'
+                    });
+                    
+                    this.handleToolCallEnd({
+                        call_id: `${taskId}_tool`,
+                        result: { processed: 100, status: 'success' }
+                    });
+                    
+                    this.handleTextMessageEnd({
+                        message_id: `${taskId}_msg`
+                    });
+                }, 4000);
+            }
+            
+            simulateStateUpdate() {
+                this.log('SIMULATE', '模拟状态更新');
+                
+                const mockState = {
+                    cards: {
+                        'state_card_1': {
+                            title: '🎯 状态驱动卡片',
+                            content: '这是通过状态快照创建的卡片',
+                            status: 'completed',
+                            type: 'state',
+                            timestamp: new Date().toLocaleTimeString(),
+                            progress: 100
+                        },
+                        'state_card_2': {
+                            title: '📊 数据分析',
+                            content: '分析用户行为数据中...',
+                            status: 'executing',
+                            type: 'analysis',
+                            timestamp: new Date().toLocaleTimeString(),
+                            progress: 65
+                        }
+                    }
+                };
+                
+                this.handleStateSnapshot({ state: mockState });
+                
+                // 模拟增量更新
+                setTimeout(() => {
+                    this.handleStateDelta({
+                        delta: {
+                            cards: {
+                                'state_card_2': {
+                                    status: 'completed',
+                                    content: '数据分析完成！发现了有趣的用户行为模式。',
+                                    progress: 100
+                                }
+                            }
+                        }
+                    });
+                }, 2000);
+            }
+            
+            clearCards() {
+                this.cardsContainer.innerHTML = '';
+                this.cards.clear();
+                this.log('UI', '已清空所有卡片');
+            }
+            
+            // 日志方法
+            log(type, message) {
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                logEntry.innerHTML = `
+                    <span class="log-timestamp">[${timestamp}]</span>
+                    <span class="log-type">${type}</span>
+                    ${message}
+                `;
+                
+                this.eventLogs.appendChild(logEntry);
+                this.eventLogs.scrollTop = this.eventLogs.scrollHeight;
+                
+                // 限制日志条数
+                const logEntries = this.eventLogs.querySelectorAll('.log-entry');
+                if (logEntries.length > 100) {
+                    logEntries[0].remove();
+                }
+            }
+        }
+        
+        // 初始化卡片渲染器
+        const cardRenderer = new CardRenderer();
+        
+        // 全局暴露以便在控制台调试
+        window.cardRenderer = cardRenderer;
+    </script>
+</body>
+</html>
