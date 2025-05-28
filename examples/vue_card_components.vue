@@ -99,16 +99,18 @@ export default {
   },
   data() {
     return {
-      cards: new Map(),
+      cards: [], // 🔧 修复：改为响应式数组
+      cardsMap: new Map(), // 保留Map用于快速查找
       logs: [],
       connectionStatus: 'disconnected',
       ws: null,
-      taskCounter: 0
+      taskCounter: 0,
+      dynamicContentGenerator: null // 🆕 动态文案生成器
     };
   },
   computed: {
     cardsArray() {
-      return Array.from(this.cards.values());
+      return this.cards; // 🔧 修复：直接返回响应式数组
     },
     connectionStatusText() {
       const statusMap = {
@@ -119,7 +121,87 @@ export default {
       return statusMap[this.connectionStatus] || '未知状态';
     }
   },
+  mounted() {
+    // 🆕 初始化动态文案生成器
+    this.initDynamicContentGenerator();
+  },
   methods: {
+    // 🆕 动态文案生成器初始化
+    initDynamicContentGenerator() {
+      this.dynamicContentGenerator = {
+        // 根据事件类型生成动态文案
+        generateContent(eventType, data) {
+          const templates = {
+            'TEXT_MESSAGE_START': [
+              '🤖 AI正在思考中...',
+              '💭 正在组织语言...',
+              '✨ 智能回复生成中...'
+            ],
+            'TEXT_MESSAGE_CONTENT': [
+              '📝 内容正在流式输出...',
+              '⚡ 实时生成文本中...',
+              '🔄 动态更新内容...'
+            ],
+            'TOOL_CALL_START': [
+              '🔧 工具调用启动中...',
+              '⚙️ 执行智能工具...',
+              '🛠️ 处理复杂任务...'
+            ],
+            'STEP_STARTED': [
+              '📋 步骤执行开始...',
+              '🎯 任务分解处理...',
+              '⏳ 流程进行中...'
+            ]
+          };
+          
+          const options = templates[eventType] || ['🔄 处理中...'];
+          const randomIndex = Math.floor(Math.random() * options.length);
+          return options[randomIndex];
+        },
+        
+        // 根据进度生成状态文案
+        generateProgressText(progress, type) {
+          if (progress < 30) {
+            return type === 'message' ? '🚀 开始生成...' : '⏳ 初始化中...';
+          } else if (progress < 70) {
+            return type === 'message' ? '📝 内容生成中...' : '⚡ 处理中...';
+          } else if (progress < 100) {
+            return type === 'message' ? '✨ 即将完成...' : '🔄 最后处理...';
+          } else {
+            return '✅ 完成！';
+          }
+        }
+      };
+    },
+    
+    // 🔧 修复：更新卡片的响应式方法
+    updateCard(id, cardData) {
+      const existingIndex = this.cards.findIndex(card => card.id === id);
+      if (existingIndex !== -1) {
+        // 更新现有卡片
+        this.$set(this.cards, existingIndex, { ...this.cards[existingIndex], ...cardData });
+      } else {
+        // 添加新卡片
+        this.cards.push(cardData);
+      }
+      // 同步更新Map用于快速查找
+      this.cardsMap.set(id, cardData);
+    },
+    
+    // 🔧 修复：删除卡片的响应式方法
+    removeCard(id) {
+      const index = this.cards.findIndex(card => card.id === id);
+      if (index !== -1) {
+        this.cards.splice(index, 1);
+      }
+      this.cardsMap.delete(id);
+    },
+    
+    // 🔧 修复：获取卡片的方法
+    getCard(id) {
+      return this.cardsMap.get(id);
+    },
+    
     // 连接管理
     connect() {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -221,14 +303,15 @@ export default {
     handleStateDelta(event) {
       if (event.delta && event.delta.cards) {
         Object.entries(event.delta.cards).forEach(([id, updates]) => {
-          const existingCard = this.cards.get(id);
+          const existingCard = this.getCard(id);
+          const dynamicContent = this.dynamicContentGenerator.generateContent('STATE_DELTA', updates);
           if (existingCard) {
-            this.cards.set(id, { ...existingCard, ...updates });
+            this.updateCard(id, { ...existingCard, ...updates });
           } else {
-            this.cards.set(id, {
+            this.updateCard(id, {
               id,
-              title: updates.title || '未知标题',
-              content: updates.content || '',
+              title: updates.title || '📊 状态更新',
+              content: updates.content || dynamicContent,
               status: updates.status || 'pending',
               type: updates.type || 'unknown',
               timestamp: updates.timestamp || new Date().toLocaleTimeString(),
@@ -242,10 +325,11 @@ export default {
     },
 
     handleToolCallStart(event) {
+      const dynamicContent = this.dynamicContentGenerator.generateContent('TOOL_CALL_START', event);
       const cardData = {
         id: event.call_id,
         title: `🔧 ${event.tool_name}`,
-        content: `正在执行工具: ${event.tool_name}`,
+        content: `${dynamicContent}\n\n参数: ${JSON.stringify(event.arguments || {}, null, 2)}`,
         status: 'executing',
         type: 'tool_call',
         timestamp: new Date().toLocaleTimeString(),
@@ -253,54 +337,68 @@ export default {
         metadata: { arguments: event.arguments }
       };
 
-      this.cards.set(event.call_id, cardData);
+      this.updateCard(event.call_id, cardData);
       this.addLog('TOOL', `工具调用开始: ${event.tool_name}`);
     },
 
+    // 🔧 修复：处理工具调用结束
     handleToolCallEnd(event) {
-      const card = this.cards.get(event.call_id);
-      if (card) {
-        this.cards.set(event.call_id, {
-          ...card,
+      const existingCard = this.getCard(event.call_id);
+      if (existingCard) {
+        const completionText = this.dynamicContentGenerator.generateProgressText(100, 'tool');
+        const updatedCard = {
+          ...existingCard,
           status: 'completed',
-          content: `工具执行完成\n结果: ${JSON.stringify(event.result, null, 2)}`,
           progress: 100,
-          metadata: { ...card.metadata, result: event.result }
-        });
+          content: `${existingCard.content}\n\n${completionText}\n结果: ${JSON.stringify(event.result, null, 2)}`,
+          metadata: { ...existingCard.metadata, result: event.result }
+        };
+        this.updateCard(event.call_id, updatedCard); // 🔧 使用新的更新方法
       }
-      this.addLog('TOOL', `工具调用结束: ${event.call_id}`);
+      this.addLog('TOOL', `工具调用完成: ${event.call_id}`);
     },
 
+    // 🔧 修复：处理文本消息开始
     handleTextMessageStart(event) {
+      const dynamicContent = this.dynamicContentGenerator.generateContent('TEXT_MESSAGE_START', event);
       const cardData = {
         id: event.message_id,
-        title: `💬 ${event.role || 'assistant'} 消息`,
-        content: '正在生成消息...',
-        status: 'executing',
+        title: '💬 AI回复',
+        content: dynamicContent,
+        status: 'generating',
         type: 'message',
+        progress: 0,
         timestamp: new Date().toLocaleTimeString(),
-        progress: 0
+        metadata: { message_id: event.message_id }
       };
-
-      this.cards.set(event.message_id, cardData);
+      
+      this.updateCard(event.message_id, cardData); // 🔧 使用新的更新方法
       this.addLog('MESSAGE', `消息开始: ${event.message_id}`);
     },
 
+    // 🔧 修复：处理文本消息内容
     handleTextMessageContent(event) {
-      const card = this.cards.get(event.message_id);
+      const card = this.getCard(event.message_id);
       if (card) {
-        this.cards.set(event.message_id, {
+        const progressText = this.dynamicContentGenerator.generateProgressText(card.progress + 10, 'message');
+        const isFirstContent = card.content.includes('正在思考') || card.content.includes('生成中');
+        const newContent = isFirstContent ? event.content : card.content + event.content;
+        
+        this.updateCard(event.message_id, {
           ...card,
-          content: event.content || '',
-          progress: Math.min(card.progress + 20, 90)
+          content: newContent,
+          progress: Math.min(card.progress + 10, 90),
+          status: 'streaming'
         });
       }
     },
 
+    // 🔧 修复：处理文本消息结束
     handleTextMessageEnd(event) {
-      const card = this.cards.get(event.message_id);
+      const card = this.getCard(event.message_id);
       if (card) {
-        this.cards.set(event.message_id, {
+        const completionText = this.dynamicContentGenerator.generateProgressText(100, 'message');
+        this.updateCard(event.message_id, {
           ...card,
           status: 'completed',
           progress: 100
@@ -309,28 +407,32 @@ export default {
       this.addLog('MESSAGE', `消息结束: ${event.message_id}`);
     },
 
+    // 🔧 修复：处理步骤开始
     handleStepStarted(event) {
+      const dynamicContent = this.dynamicContentGenerator.generateContent('STEP_STARTED', event);
       const cardData = {
         id: `step_${event.step_id}`,
         title: `📋 ${event.step_name || '未知步骤'}`,
-        content: event.description || '执行中...',
+        content: `${dynamicContent}\n\n${event.description || '执行中...'}`,
         status: 'executing',
         type: 'step',
         timestamp: new Date().toLocaleTimeString(),
         progress: 0
       };
 
-      this.cards.set(`step_${event.step_id}`, cardData);
+      this.updateCard(`step_${event.step_id}`, cardData); // 🔧 使用新的更新方法
       this.addLog('STEP', `步骤开始: ${event.step_name}`);
     },
 
+    // 🔧 修复：处理步骤完成
     handleStepFinished(event) {
-      const card = this.cards.get(`step_${event.step_id}`);
+      const card = this.getCard(`step_${event.step_id}`);
       if (card) {
-        this.cards.set(`step_${event.step_id}`, {
+        const completionText = this.dynamicContentGenerator.generateProgressText(100, 'step');
+        this.updateCard(`step_${event.step_id}`, {
           ...card,
           status: event.success ? 'completed' : 'error',
-          content: event.result || card.content,
+          content: event.result || `${card.content}\n\n${completionText}`,
           progress: 100
         });
       }
@@ -344,6 +446,7 @@ export default {
     },
 
     // 模拟功能
+    // 🆕 模拟任务流程（使用动态文案）
     simulateTaskFlow() {
       this.addLog('SIMULATE', '开始模拟任务流程');
       const taskId = `task_${++this.taskCounter}`;
@@ -405,6 +508,7 @@ export default {
       }, 4000);
     },
 
+    // 🆕 模拟状态更新（使用动态文案）
     simulateStateUpdate() {
       this.addLog('SIMULATE', '模拟状态更新');
 
@@ -437,6 +541,7 @@ export default {
 
       // 模拟增量更新
       setTimeout(() => {
+        const dynamicContent = this.dynamicContentGenerator.generateContent('STATE_DELTA', {});
         this.handleStateDelta({
           event_type: 'STATE_DELTA',
           timestamp: Date.now(),
@@ -444,7 +549,7 @@ export default {
             cards: {
               'state_card_2': {
                 status: 'completed',
-                content: '数据分析完成！发现了有趣的用户行为模式。',
+                content: `${dynamicContent}\n\n数据分析完成！发现了有趣的用户行为模式。`,
                 progress: 100
               }
             }
@@ -453,8 +558,10 @@ export default {
       }, 2000);
     },
 
+    // 🔧 修复：清空卡片
     clearCards() {
-      this.cards = new Map();
+      this.cards.splice(0); // 清空响应式数组
+      this.cardsMap.clear(); // 清空Map
       this.addLog('UI', '已清空所有卡片');
     },
 
