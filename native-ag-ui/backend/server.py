@@ -215,6 +215,8 @@ class HTTPServer:
                 self._handle_api_events(client_socket, headers)
             elif path == '/api/state':
                 self._handle_api_state(client_socket)
+            elif path == '/api/generate-ui' and method == 'POST':
+                self._handle_api_generate_ui(client_socket, headers)
             else:
                 self._send_404(client_socket)
                 
@@ -285,6 +287,131 @@ class HTTPServer:
         }
         
         self._send_json_response(client_socket, state_data)
+    
+    def _handle_api_generate_ui(self, client_socket, headers):
+        """处理动态UI生成API请求"""
+        try:
+            # 读取请求体
+            content_length = int(headers.get('content-length', 0))
+            if content_length > 0:
+                request_body = client_socket.recv(content_length).decode('utf-8')
+                request_data = json.loads(request_body)
+                
+                content = request_data.get('content', '')
+                context = request_data.get('context', {})
+                
+                # 模拟动态UI生成逻辑
+                ui_components = self._generate_ui_components(content, context)
+                
+                response_data = {
+                    'success': True,
+                    'components': ui_components,
+                    'timestamp': int(asyncio.get_event_loop().time() * 1000) if asyncio._get_running_loop() else 0
+                }
+            else:
+                response_data = {
+                    'success': False,
+                    'error': 'Missing request body'
+                }
+                
+        except Exception as e:
+            response_data = {
+                'success': False,
+                'error': str(e)
+            }
+        
+        self._send_json_response(client_socket, response_data)
+    
+    def _generate_ui_components(self, content, context):
+        """生成UI组件配置"""
+        components = []
+        
+        # 检测进度信息
+        import re
+        progress_match = re.search(r'(\d+)%', content)
+        if progress_match:
+            progress = int(progress_match.group(1))
+            components.append({
+                'type': 'progress_tracker',
+                'data': {
+                    'progress': progress,
+                    'description': content,
+                    'status': 'active' if progress < 100 else 'completed'
+                }
+            })
+        
+        # 检测代码块
+        code_matches = re.findall(r'```([\s\S]*?)```', content)
+        for code in code_matches:
+            components.append({
+                'type': 'code_block',
+                'data': {
+                    'code': code.strip(),
+                    'language': self._detect_language(code)
+                }
+            })
+        
+        # 检测任务列表
+        if any(keyword in content.lower() for keyword in ['任务', 'task', '步骤', 'step']):
+            tasks = self._extract_tasks(content)
+            if tasks:
+                components.append({
+                    'type': 'task_list',
+                    'data': {
+                        'tasks': tasks
+                    }
+                })
+        
+        # 检测数据可视化需求
+        if any(keyword in content.lower() for keyword in ['图表', 'chart', '数据', 'data', '统计']):
+            components.append({
+                'type': 'data_visualization',
+                'data': {
+                    'description': content,
+                    'chart_type': 'bar',
+                    'data': self._extract_numbers(content)
+                }
+            })
+        
+        return components
+    
+    def _detect_language(self, code):
+        """检测代码语言"""
+        code_lower = code.lower()
+        if 'function' in code_lower or 'const' in code_lower or 'let' in code_lower:
+            return 'javascript'
+        elif 'def ' in code_lower or 'import ' in code_lower:
+            return 'python'
+        elif 'public class' in code_lower or 'system.out' in code_lower:
+            return 'java'
+        elif '#include' in code_lower or 'int main' in code_lower:
+            return 'cpp'
+        return 'text'
+    
+    def _extract_tasks(self, content):
+        """从内容中提取任务列表"""
+        lines = content.split('\n')
+        tasks = []
+        
+        for line in lines:
+            line = line.strip()
+            if line and (line.startswith(('-', '*', '+')) or any(char.isdigit() for char in line[:3])):
+                # 清理任务文本
+                task_text = re.sub(r'^[\d\-\*\+\s]+', '', line).strip()
+                if task_text:
+                    completed = '✓' in task_text or '完成' in task_text
+                    tasks.append({
+                        'text': task_text,
+                        'completed': completed
+                    })
+        
+        return tasks
+    
+    def _extract_numbers(self, content):
+        """从内容中提取数字数据"""
+        import re
+        numbers = re.findall(r'\d+', content)
+        return [int(num) for num in numbers[:10]]  # 最多返回10个数字
     
     def _send_json_response(self, client_socket, data):
         """发送JSON响应"""

@@ -143,6 +143,8 @@ function initializeAGUIClient() {
     aguiClient.onEvent('text_message_start', handleTextMessageStart);
     aguiClient.onEvent('text_message_content', handleTextMessageContent);
     aguiClient.onEvent('text_message_end', handleTextMessageEnd);
+    aguiClient.onEvent('tool_call_start', handleToolCallStart);
+    aguiClient.onEvent('tool_call_end', handleToolCallEnd);
     aguiClient.onEvent('state_snapshot', handleStateSnapshot);
     aguiClient.onEvent('state_delta', handleStateDelta);
     aguiClient.onEvent('custom', handleCustomEvent);
@@ -289,6 +291,24 @@ function addMessage(message) {
     
     // 创建消息元素
     const messageElement = createMessageElement(message);
+    
+    // 尝试生成动态UI组件
+    if (message.role === 'assistant' && message.content && window.dynamicUIGenerator) {
+        const dynamicUI = window.dynamicUIGenerator.generateUI(message.content, {
+            messageId: message.id,
+            role: message.role,
+            timestamp: message.timestamp
+        });
+        
+        if (dynamicUI) {
+            // 创建动态UI容器
+            const dynamicUIContainer = document.createElement('div');
+            dynamicUIContainer.className = 'message-dynamic-ui';
+            dynamicUIContainer.appendChild(dynamicUI);
+            messageElement.appendChild(dynamicUIContainer);
+        }
+    }
+    
     elements.messagesContainer.appendChild(messageElement);
     
     // 滚动到底部
@@ -390,10 +410,37 @@ function updateMessageContent(messageId, content, append = false) {
     
     const bubble = messageElement.querySelector('.message-bubble');
     if (bubble) {
+        let updatedContent;
         if (append) {
             bubble.textContent += content;
+            updatedContent = bubble.textContent;
         } else {
             bubble.textContent = content;
+            updatedContent = content;
+        }
+        
+        // 检查是否需要更新动态UI
+        if (updatedContent && window.dynamicUIGenerator) {
+            const existingDynamicUI = messageElement.querySelector('.message-dynamic-ui');
+            const newDynamicUI = window.dynamicUIGenerator.generateUI(updatedContent, {
+                messageId: messageId,
+                role: 'assistant',
+                timestamp: Date.now()
+            });
+            
+            if (newDynamicUI) {
+                if (existingDynamicUI) {
+                    // 更新现有的动态UI
+                    existingDynamicUI.innerHTML = '';
+                    existingDynamicUI.appendChild(newDynamicUI);
+                } else {
+                    // 创建新的动态UI容器
+                    const dynamicUIContainer = document.createElement('div');
+                    dynamicUIContainer.className = 'message-dynamic-ui';
+                    dynamicUIContainer.appendChild(newDynamicUI);
+                    messageElement.appendChild(dynamicUIContainer);
+                }
+            }
         }
     }
     
@@ -425,12 +472,27 @@ function clearChat() {
         <div class="welcome-message">
             <div class="welcome-icon">🤖</div>
             <h3>聊天记录已清空</h3>
-            <p>开始新的对话吧！</p>
+            <p>开始新的对话吧！体验全新的动态UI生成功能！</p>
         </div>
     `;
     
     // 重置消息计数器
     messageIdCounter = 0;
+    
+    // 清空React卡片
+    if (window.reactCardRenderer) {
+        window.reactCardRenderer.clearCards();
+    }
+    
+    // 清空活动卡片映射
+    if (window.activeCards) {
+        window.activeCards.clear();
+    }
+    
+    // 清空动态UI生成器
+    if (window.dynamicUIGenerator) {
+        window.dynamicUIGenerator.clearAllComponents();
+    }
     
     showNotification('聊天记录已清空', 'success');
 }
@@ -611,6 +673,19 @@ function handleTextMessageStart(event) {
         timestamp: event.timestamp || Date.now(),
         streaming: true
     };
+    
+    // 创建React卡片显示消息生成状态
+    if (window.reactCardRenderer) {
+        const cardId = window.reactCardRenderer.addCard('TEXT_MESSAGE_START', {
+            description: '正在生成AI回复...',
+            messageId: event.message_id,
+            role: event.role || 'assistant'
+        });
+        
+        // 存储卡片ID以便后续更新
+        if (!window.activeCards) window.activeCards = new Map();
+        window.activeCards.set(`message_${event.message_id}`, cardId);
+    }
 }
 
 /**
@@ -628,6 +703,20 @@ function handleTextMessageContent(event) {
     } else {
         // 后续内容块，追加到现有消息
         updateMessageContent(event.message_id, event.content || '', true);
+    }
+    
+    // 更新React卡片进度
+    if (window.reactCardRenderer && window.activeCards) {
+        const cardId = window.activeCards.get(`message_${event.message_id}`);
+        if (cardId) {
+            // 模拟进度更新
+            const currentProgress = Math.min(90, Math.random() * 30 + 30);
+            window.reactCardRenderer.updateCard(cardId, {
+                progress: currentProgress,
+                title: '📝 内容正在流式输出...',
+                description: `正在生成回复内容... (${Math.round(currentProgress)}%)`
+            });
+        }
     }
 }
 
@@ -651,6 +740,80 @@ function handleTextMessageEnd(event) {
         const streamingIndicator = messageElement.querySelector('.streaming-indicator');
         if (streamingIndicator) {
             streamingIndicator.remove();
+        }
+    }
+    
+    // 完成React卡片状态更新
+    if (window.reactCardRenderer && window.activeCards) {
+        const cardId = window.activeCards.get(`message_${event.message_id}`);
+        if (cardId) {
+            window.reactCardRenderer.updateCard(cardId, {
+                status: 'completed',
+                progress: 100,
+                title: '✅ AI回复生成完成',
+                description: '消息已成功生成并显示在对话中'
+            });
+            
+            // 3秒后自动清理完成的消息卡片
+            setTimeout(() => {
+                if (window.activeCards && window.activeCards.has(`message_${event.message_id}`)) {
+                    window.activeCards.delete(`message_${event.message_id}`);
+                }
+            }, 3000);
+        }
+    }
+}
+
+/**
+ * 处理工具调用开始
+ */
+function handleToolCallStart(event) {
+    console.log('🔧 工具调用开始:', event);
+    
+    // 显示工具调用通知
+    const toolName = event.tool_name || '未知工具';
+    showNotification(`开始调用工具: ${toolName}`, 'info');
+    
+    // 创建React卡片
+    if (window.reactCardRenderer) {
+        const cardId = window.reactCardRenderer.addCard('TOOL_CALL_START', {
+            description: `正在调用工具: ${toolName}`,
+            toolName: toolName,
+            ...event
+        });
+        
+        // 存储卡片ID以便后续更新
+        if (!window.activeCards) window.activeCards = new Map();
+        window.activeCards.set(`tool_${event.tool_call_id || Date.now()}`, cardId);
+    }
+}
+
+/**
+ * 处理工具调用结束
+ */
+function handleToolCallEnd(event) {
+    console.log('🔧 工具调用结束:', event);
+    
+    const toolName = event.tool_name || '未知工具';
+    const success = event.success !== false; // 默认为成功，除非明确标记为失败
+    
+    showNotification(`工具调用${success ? '完成' : '失败'}: ${toolName}`, success ? 'success' : 'error');
+    
+    // 更新React卡片状态
+    if (window.reactCardRenderer && window.activeCards) {
+        const cardKey = `tool_${event.tool_call_id || Date.now()}`;
+        const cardId = window.activeCards.get(cardKey);
+        
+        if (cardId) {
+            window.reactCardRenderer.updateCard(cardId, {
+                status: success ? 'completed' : 'error',
+                progress: 100,
+                title: success ? `✅ ${toolName} 调用完成` : `❌ ${toolName} 调用失败`,
+                description: event.result || event.error || `工具 ${toolName} ${success ? '执行成功' : '执行失败'}`
+            });
+            
+            // 清理已完成的卡片引用
+            window.activeCards.delete(cardKey);
         }
     }
 }

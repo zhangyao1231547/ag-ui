@@ -3,11 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AG-UI 原生实现</title>
+    <title>AG-UI 原生实现 - 动态UI生成</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="dynamic-ui-styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- React 和相关依赖 -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
 </head>
 <body>
     <div class="app-container">
@@ -152,6 +160,9 @@
                     </div>
                 </div>
                 
+                <!-- React 卡片组件渲染区域 -->
+                <div id="reactCardsContainer" class="react-cards-container"></div>
+                
                 <div class="input-container">
                     <div class="input-wrapper">
                         <textarea 
@@ -203,6 +214,226 @@
 
     <!-- 加载脚本 -->
     <script src="ag-ui-client.js"></script>
+    <script src="dynamic-ui-generator.js"></script>
     <script src="script.js"></script>
+    
+    <!-- React 卡片组件 -->
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef } = React;
+
+        // 简化的动画组件，替代framer-motion
+        const motion = {
+            div: ({ children, className, style, ...props }) => (
+                React.createElement('div', {
+                    className: className + (props.whileHover ? ' card' : ''),
+                    style: style,
+                    ...props
+                }, children)
+            )
+        };
+
+        const AnimatePresence = ({ children }) => children;
+
+        // AG-UI 事件类型定义
+        const AGUIEventTypes = {
+            STATE_SNAPSHOT: 'STATE_SNAPSHOT',
+            STATE_DELTA: 'STATE_DELTA',
+            TOOL_CALL_START: 'TOOL_CALL_START',
+            TOOL_CALL_END: 'TOOL_CALL_END',
+            TEXT_MESSAGE_START: 'TEXT_MESSAGE_START',
+            TEXT_MESSAGE_CONTENT: 'TEXT_MESSAGE_CONTENT',
+            TEXT_MESSAGE_END: 'TEXT_MESSAGE_END',
+            STEP_STARTED: 'STEP_STARTED',
+            STEP_FINISHED: 'STEP_FINISHED'
+        };
+
+        // 动态内容生成器类
+        class DynamicContentGenerator {
+            generateContent(eventType, data) {
+                const templates = {
+                    'TEXT_MESSAGE_START': [
+                        '🤖 AI正在思考中...',
+                        '💭 正在组织语言...',
+                        '✨ 智能回复生成中...'
+                    ],
+                    'TEXT_MESSAGE_CONTENT': [
+                        '📝 内容正在流式输出...',
+                        '⚡ 实时生成文本中...',
+                        '🔄 动态更新内容...'
+                    ],
+                    'TOOL_CALL_START': [
+                        '🔧 工具调用启动中...',
+                        '⚙️ 执行智能工具...',
+                        '🛠️ 处理复杂任务...'
+                    ],
+                    'STEP_STARTED': [
+                        '📋 步骤执行开始...',
+                        '🎯 任务分解处理...',
+                        '⏳ 流程进行中...'
+                    ],
+                    'STATE_DELTA': [
+                        '🔄 状态更新中...',
+                        '📊 数据同步中...',
+                        '⚡ 实时更新...'
+                    ]
+                };
+                
+                const options = templates[eventType] || ['🔄 处理中...'];
+                const randomIndex = Math.floor(Math.random() * options.length);
+                return options[randomIndex];
+            }
+            
+            generateProgressText(progress, type) {
+                if (progress < 30) {
+                    return type === 'message' ? '🚀 开始生成...' : '⏳ 初始化中...';
+                } else if (progress < 70) {
+                    return type === 'message' ? '📝 内容生成中...' : '⚡ 处理中...';
+                } else if (progress < 100) {
+                    return type === 'message' ? '✨ 即将完成...' : '🔄 最后处理...';
+                } else {
+                    return '✅ 完成！';
+                }
+            }
+        }
+
+        // 卡片组件
+        const CardComponent = ({ card, onAction }) => {
+            const getStatusColor = (status) => {
+                switch (status) {
+                    case 'pending': return 'border-yellow-400 bg-yellow-50';
+                    case 'executing': return 'border-blue-400 bg-blue-50';
+                    case 'completed': return 'border-green-400 bg-green-50';
+                    case 'error': return 'border-red-400 bg-red-50';
+                    default: return 'border-gray-400 bg-gray-50';
+                }
+            };
+
+            const getStatusIcon = (status) => {
+                switch (status) {
+                    case 'pending': return '⏳';
+                    case 'executing': return '🔄';
+                    case 'completed': return '✅';
+                    case 'error': return '❌';
+                    default: return '📋';
+                }
+            };
+
+            return React.createElement(motion.div, {
+                className: `card p-4 border-2 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md ${getStatusColor(card.status)}`,
+                whileHover: true
+            }, [
+                React.createElement('div', {
+                    key: 'header',
+                    className: 'flex items-center justify-between mb-3'
+                }, [
+                    React.createElement('div', {
+                        key: 'title-section',
+                        className: 'flex items-center space-x-2'
+                    }, [
+                        React.createElement('span', {
+                            key: 'icon',
+                            className: 'text-lg'
+                        }, getStatusIcon(card.status)),
+                        React.createElement('h3', {
+                            key: 'title',
+                            className: 'font-semibold text-gray-800'
+                        }, card.title)
+                    ]),
+                    React.createElement('span', {
+                        key: 'timestamp',
+                        className: 'text-xs text-gray-500'
+                    }, new Date(card.timestamp).toLocaleTimeString())
+                ]),
+                React.createElement('div', {
+                    key: 'content',
+                    className: 'mb-3'
+                }, [
+                    React.createElement('p', {
+                        key: 'description',
+                        className: 'text-sm text-gray-600 mb-2'
+                    }, card.description),
+                    card.progress !== undefined && React.createElement('div', {
+                        key: 'progress',
+                        className: 'w-full bg-gray-200 rounded-full h-2'
+                    }, React.createElement('div', {
+                        className: 'bg-blue-600 h-2 rounded-full transition-all duration-300',
+                        style: { width: `${card.progress}%` }
+                    }))
+                ]),
+                card.actions && card.actions.length > 0 && React.createElement('div', {
+                    key: 'actions',
+                    className: 'flex space-x-2'
+                }, card.actions.map((action, index) => 
+                    React.createElement('button', {
+                        key: index,
+                        onClick: () => onAction(card.id, action),
+                        className: 'px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors'
+                    }, action.label)
+                ))
+            ]);
+        };
+
+        // 卡片渲染器组件
+        const CardRenderer = () => {
+            const [cards, setCards] = useState([]);
+            const contentGenerator = useRef(new DynamicContentGenerator());
+
+            // 添加卡片
+            const addCard = useCallback((eventType, data) => {
+                const newCard = {
+                    id: `card_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    title: contentGenerator.current.generateContent(eventType, data),
+                    description: data.description || `事件类型: ${eventType}`,
+                    status: 'executing',
+                    timestamp: Date.now(),
+                    progress: 0,
+                    eventType: eventType,
+                    data: data
+                };
+
+                setCards(prev => [...prev, newCard]);
+                return newCard.id;
+            }, []);
+
+            // 更新卡片
+            const updateCard = useCallback((cardId, updates) => {
+                setCards(prev => prev.map(card => 
+                    card.id === cardId ? { ...card, ...updates } : card
+                ));
+            }, []);
+
+            // 处理卡片动作
+            const handleCardAction = useCallback((cardId, action) => {
+                console.log('卡片动作:', cardId, action);
+                // 这里可以添加具体的动作处理逻辑
+            }, []);
+
+            // 暴露方法到全局，供script.js调用
+            useEffect(() => {
+                window.reactCardRenderer = {
+                    addCard,
+                    updateCard,
+                    clearCards: () => setCards([])
+                };
+            }, [addCard, updateCard]);
+
+            return React.createElement('div', {
+                className: 'space-y-3 p-4'
+            }, cards.map(card => 
+                React.createElement(CardComponent, {
+                    key: card.id,
+                    card: card,
+                    onAction: handleCardAction
+                })
+            ));
+        };
+
+        // 渲染React组件
+        const container = document.getElementById('reactCardsContainer');
+        if (container) {
+            const root = ReactDOM.createRoot(container);
+            root.render(React.createElement(CardRenderer));
+        }
+    </script>
 </body>
 </html>

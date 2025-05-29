@@ -183,9 +183,16 @@ class WebSocketConnection:
                 payload = WebSocketFrame.parse_frame(self.buffer)
                 
                 if payload is not None:
-                    # 成功解析到完整帧，清空缓冲区
-                    self.buffer = b''
-                    # 安全地解码UTF-8，处理不完整的字节序列
+                    # 成功解析到完整帧，计算实际消耗的字节数
+                    frame_length = self._calculate_frame_length(self.buffer)
+                    if frame_length > 0:
+                        # 只移除已处理的帧数据，保留剩余数据
+                        self.buffer = self.buffer[frame_length:]
+                    else:
+                        # 如果无法计算帧长度，清空缓冲区
+                        self.buffer = b''
+                    
+                    # 安全地解码UTF-8
                     try:
                         return payload.decode('utf-8')
                     except UnicodeDecodeError as decode_error:
@@ -195,6 +202,10 @@ class WebSocketConnection:
                         return payload.decode('utf-8', errors='replace')
                 else:
                     # 帧不完整，继续等待更多数据
+                    # 但要防止缓冲区无限增长
+                    if len(self.buffer) > 65536:  # 64KB限制
+                        print("WebSocket缓冲区过大，清空缓冲区")
+                        self.buffer = b''
                     return None
             except Exception as parse_error:
                 print(f"WebSocket帧解析错误: {parse_error}")
@@ -206,6 +217,34 @@ class WebSocketConnection:
             print(f"接收消息失败: {e}")
             self.connected = False
             return None
+    
+    def _calculate_frame_length(self, data: bytes) -> int:
+        """计算WebSocket帧的总长度"""
+        if len(data) < 2:
+            return 0
+        
+        payload_len = data[1] & 0x7F
+        masked = (data[1] & 0x80) >> 7
+        offset = 2
+        
+        # 扩展载荷长度
+        if payload_len == 126:
+            if len(data) < offset + 2:
+                return 0
+            payload_len = struct.unpack('>H', data[offset:offset+2])[0]
+            offset += 2
+        elif payload_len == 127:
+            if len(data) < offset + 8:
+                return 0
+            payload_len = struct.unpack('>Q', data[offset:offset+8])[0]
+            offset += 8
+        
+        # 掩码
+        if masked:
+            offset += 4
+        
+        # 总帧长度 = 头部 + 载荷
+        return offset + payload_len
     
     def close(self):
         """关闭连接"""
