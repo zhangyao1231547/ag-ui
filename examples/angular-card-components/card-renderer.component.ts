@@ -29,6 +29,100 @@ interface LogEntry {
 }
 
 /**
+ * 动态内容生成器类
+ * 根据事件类型和进度生成动态文本内容
+ */
+class DynamicContentGenerator {
+  /**
+   * 根据事件类型生成动态内容
+   */
+  generateContent(eventType: string, data?: any): string {
+    const contentTemplates: Record<string, string[]> = {
+      'TOOL_CALL_START': [
+        '🔧 正在启动工具调用...',
+        '⚙️ 工具初始化中，请稍候...',
+        '🛠️ 准备执行工具操作...',
+        '🔨 工具调用准备就绪...'
+      ],
+      'TOOL_CALL_END': [
+        '✅ 工具调用成功完成！',
+        '🎉 工具执行完毕，结果已生成',
+        '✨ 工具操作圆满结束',
+        '🏆 工具调用任务达成！'
+      ],
+      'TEXT_MESSAGE_START': [
+        '💭 AI正在思考中...',
+        '🧠 智能分析进行中...',
+        '✍️ 正在生成回复内容...',
+        '🤖 AI助手正在工作...'
+      ],
+      'TEXT_MESSAGE_CONTENT': [
+        '📝 内容生成中...',
+        '⌨️ 正在输出文字...',
+        '📄 文本内容更新中...',
+        '💬 消息内容构建中...'
+      ],
+      'STEP_STARTED': [
+        '🚀 新步骤启动！',
+        '📋 执行计划中的下一步...',
+        '⏭️ 进入新的处理阶段...',
+        '🎯 开始执行任务步骤...'
+      ],
+      'STATE_DELTA': [
+        '🔄 状态更新中...',
+        '📊 数据同步进行中...',
+        '🔃 界面状态刷新...',
+        '⚡ 实时更新状态信息...'
+      ]
+    };
+
+    const templates = contentTemplates[eventType] || ['📌 处理中...'];
+    const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
+    
+    // 如果有额外数据，可以进行模板替换
+    if (data && data.tool_name) {
+      return randomTemplate.replace('工具', data.tool_name);
+    }
+    
+    return randomTemplate;
+  }
+
+  /**
+   * 根据进度生成状态文本
+   */
+  generateProgressText(progress: number): string {
+    if (progress === 0) {
+      return '准备开始...';
+    } else if (progress < 25) {
+      return '初始化中...';
+    } else if (progress < 50) {
+      return '处理中...';
+    } else if (progress < 75) {
+      return '即将完成...';
+    } else if (progress < 100) {
+      return '最后阶段...';
+    } else {
+      return '已完成！';
+    }
+  }
+
+  /**
+   * 生成随机的鼓励性文本
+   */
+  generateEncouragementText(): string {
+    const encouragements = [
+      '💪 继续保持！',
+      '🌟 表现出色！',
+      '🚀 进展顺利！',
+      '✨ 非常棒！',
+      '🎯 目标明确！',
+      '⚡ 效率很高！'
+    ];
+    return encouragements[Math.floor(Math.random() * encouragements.length)];
+  }
+}
+
+/**
  * AG-UI卡片渲染器组件
  * 基于AG-UI协议实现的Angular组件，展示动态事件处理和UI渲染
  */
@@ -234,6 +328,7 @@ export class CardRendererComponent implements OnInit, OnDestroy, AfterViewChecke
   connectionStatus: 'connected' | 'connecting' | 'disconnected' = 'disconnected';
   ws: WebSocket | null = null;
   taskCounter = 0;
+  private dynamicContentGenerator = new DynamicContentGenerator();
 
   constructor() {}
 
@@ -362,15 +457,28 @@ export class CardRendererComponent implements OnInit, OnDestroy, AfterViewChecke
 
   handleStateDelta(event: any): void {
     if (event.delta && event.delta.cards) {
+      const dynamicContent = this.dynamicContentGenerator.generateContent('STATE_DELTA', event);
+      
       Object.entries(event.delta.cards).forEach(([id, updates]: [string, any]) => {
         const existingCard = this.cards.get(id);
         if (existingCard) {
-          this.cards.set(id, { ...existingCard, ...updates });
+          // 为现有卡片添加动态更新信息
+          const updatedContent = updates.content ? 
+            `${dynamicContent}\n\n📊 最新内容:\n${updates.content}` : 
+            existingCard.content;
+          
+          this.cards.set(id, { 
+            ...existingCard, 
+            ...updates,
+            content: updatedContent
+          });
         } else {
+          const progressText = this.dynamicContentGenerator.generateProgressText(updates.progress || 0);
+          
           this.cards.set(id, {
             id,
             title: updates.title || '未知标题',
-            content: updates.content || '',
+            content: `${dynamicContent}\n\n📊 状态: ${progressText}\n📝 内容: ${updates.content || ''}`,
             status: updates.status || 'pending',
             type: updates.type || 'unknown',
             timestamp: updates.timestamp || new Date().toLocaleTimeString(),
@@ -384,10 +492,13 @@ export class CardRendererComponent implements OnInit, OnDestroy, AfterViewChecke
   }
 
   handleToolCallStart(event: any): void {
+    const dynamicContent = this.dynamicContentGenerator.generateContent('TOOL_CALL_START', event);
+    const progressText = this.dynamicContentGenerator.generateProgressText(0);
+    
     const cardData: CardData = {
       id: event.call_id,
       title: `🔧 ${event.tool_name}`,
-      content: `正在执行工具: ${event.tool_name}`,
+      content: `${dynamicContent}\n\n📊 状态: ${progressText}\n🛠️ 工具: ${event.tool_name}\n📝 参数: ${JSON.stringify(event.arguments, null, 2)}`,
       status: CardStatus.EXECUTING,
       type: CardType.TOOL_CALL,
       timestamp: new Date().toLocaleTimeString(),
@@ -402,10 +513,14 @@ export class CardRendererComponent implements OnInit, OnDestroy, AfterViewChecke
   handleToolCallEnd(event: any): void {
     const card = this.cards.get(event.call_id);
     if (card) {
+      const dynamicContent = this.dynamicContentGenerator.generateContent('TOOL_CALL_END', event);
+      const progressText = this.dynamicContentGenerator.generateProgressText(100);
+      const encouragement = this.dynamicContentGenerator.generateEncouragementText();
+      
       this.cards.set(event.call_id, {
         ...card,
         status: CardStatus.COMPLETED,
-        content: `工具执行完成\n结果: ${JSON.stringify(event.result, null, 2)}`,
+        content: `${dynamicContent}\n\n📊 状态: ${progressText}\n${encouragement}\n\n📋 执行结果:\n${JSON.stringify(event.result, null, 2)}`,
         progress: 100,
         metadata: { ...card.metadata, result: event.result }
       });
@@ -414,10 +529,13 @@ export class CardRendererComponent implements OnInit, OnDestroy, AfterViewChecke
   }
 
   handleTextMessageStart(event: any): void {
+    const dynamicContent = this.dynamicContentGenerator.generateContent('TEXT_MESSAGE_START', event);
+    const progressText = this.dynamicContentGenerator.generateProgressText(0);
+    
     const cardData: CardData = {
       id: event.message_id,
       title: `💬 ${event.role || 'assistant'} 消息`,
-      content: '正在生成消息...',
+      content: `${dynamicContent}\n\n📊 状态: ${progressText}\n👤 角色: ${event.role || 'assistant'}`,
       status: CardStatus.EXECUTING,
       type: CardType.MESSAGE,
       timestamp: new Date().toLocaleTimeString(),
@@ -431,10 +549,14 @@ export class CardRendererComponent implements OnInit, OnDestroy, AfterViewChecke
   handleTextMessageContent(event: any): void {
     const card = this.cards.get(event.message_id);
     if (card) {
+      const newProgress = Math.min(card.progress + 20, 90);
+      const dynamicContent = this.dynamicContentGenerator.generateContent('TEXT_MESSAGE_CONTENT', event);
+      const progressText = this.dynamicContentGenerator.generateProgressText(newProgress);
+      
       this.cards.set(event.message_id, {
         ...card,
-        content: event.content || '',
-        progress: Math.min(card.progress + 20, 90)
+        content: `${dynamicContent}\n\n📊 状态: ${progressText}\n\n💬 消息内容:\n${event.content || ''}`,
+        progress: newProgress
       });
     }
   }
@@ -452,10 +574,13 @@ export class CardRendererComponent implements OnInit, OnDestroy, AfterViewChecke
   }
 
   handleStepStarted(event: any): void {
+    const dynamicContent = this.dynamicContentGenerator.generateContent('STEP_STARTED', event);
+    const progressText = this.dynamicContentGenerator.generateProgressText(0);
+    
     const cardData: CardData = {
       id: `step_${event.step_id}`,
       title: `📋 ${event.step_name || '未知步骤'}`,
-      content: event.description || '执行中...',
+      content: `${dynamicContent}\n\n📊 状态: ${progressText}\n📝 描述: ${event.description || '执行中...'}\n🆔 步骤ID: ${event.step_id}`,
       status: CardStatus.EXECUTING,
       type: CardType.STEP,
       timestamp: new Date().toLocaleTimeString(),

@@ -4,7 +4,19 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
+// 简化的动画组件，替代framer-motion
+const motion = {
+  div: ({ children, className, style, ...props }: any) => (
+    <div className={className} style={style} {...props}>
+      {children}
+    </div>
+  )
+};
+
+const AnimatePresence = ({ children }: { children?: React.ReactNode }) => (
+  <>{children}</>
+);
 
 // AG-UI 事件类型定义
 type AGUIEventType = 
@@ -231,6 +243,57 @@ interface CardRendererProps {
   onCardAction?: (action: string, cardId: string) => void;
 }
 
+// 🆕 动态内容生成器类
+class DynamicContentGenerator {
+  // 根据事件类型生成动态文案
+  generateContent(eventType: string, data?: any): string {
+    const templates: Record<string, string[]> = {
+      'TEXT_MESSAGE_START': [
+        '🤖 AI正在思考中...',
+        '💭 正在组织语言...',
+        '✨ 智能回复生成中...'
+      ],
+      'TEXT_MESSAGE_CONTENT': [
+        '📝 内容正在流式输出...',
+        '⚡ 实时生成文本中...',
+        '🔄 动态更新内容...'
+      ],
+      'TOOL_CALL_START': [
+        '🔧 工具调用启动中...',
+        '⚙️ 执行智能工具...',
+        '🛠️ 处理复杂任务...'
+      ],
+      'STEP_STARTED': [
+        '📋 步骤执行开始...',
+        '🎯 任务分解处理...',
+        '⏳ 流程进行中...'
+      ],
+      'STATE_DELTA': [
+        '🔄 状态更新中...',
+        '📊 数据同步中...',
+        '⚡ 实时更新...'
+      ]
+    };
+    
+    const options = templates[eventType] || ['🔄 处理中...'];
+    const randomIndex = Math.floor(Math.random() * options.length);
+    return options[randomIndex];
+  }
+  
+  // 根据进度生成状态文案
+  generateProgressText(progress: number, type?: string): string {
+    if (progress < 30) {
+      return type === 'message' ? '🚀 开始生成...' : '⏳ 初始化中...';
+    } else if (progress < 70) {
+      return type === 'message' ? '📝 内容生成中...' : '⚡ 处理中...';
+    } else if (progress < 100) {
+      return type === 'message' ? '✨ 即将完成...' : '🔄 最后处理...';
+    } else {
+      return '✅ 完成！';
+    }
+  }
+}
+
 const CardRenderer: React.FC<CardRendererProps> = ({ 
   wsUrl = 'ws://localhost:8000/ws',
   onCardAction 
@@ -240,6 +303,7 @@ const CardRenderer: React.FC<CardRendererProps> = ({
   const [logs, setLogs] = useState<Array<{ timestamp: string; type: string; message: string }>>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const taskCounterRef = useRef(0);
+  const dynamicContentGenerator = useRef(new DynamicContentGenerator());
 
   // 日志记录函数
   const addLog = useCallback((type: string, message: string) => {
@@ -401,10 +465,11 @@ const CardRenderer: React.FC<CardRendererProps> = ({
       const newCards = new Map(prev);
       const card = newCards.get(event.call_id);
       if (card) {
+        const completionText = dynamicContentGenerator.current.generateProgressText(100);
         newCards.set(event.call_id, {
           ...card,
           status: 'completed',
-          content: `工具执行完成\n结果: ${JSON.stringify(event.result, null, 2)}`,
+          content: `${completionText}\n工具执行完成\n结果: ${JSON.stringify(event.result, null, 2)}`,
           progress: 100,
           metadata: { ...card.metadata, result: event.result }
         });
@@ -415,10 +480,11 @@ const CardRenderer: React.FC<CardRendererProps> = ({
   }, [addLog]);
 
   const handleTextMessageStart = useCallback((event: TextMessageEvent) => {
+    const dynamicContent = dynamicContentGenerator.current.generateContent('TEXT_MESSAGE_START', event);
     const cardData: CardData = {
       id: event.message_id,
       title: `💬 ${event.role || 'assistant'} 消息`,
-      content: '正在生成消息...',
+      content: dynamicContent,
       status: 'executing',
       type: 'message',
       timestamp: new Date().toLocaleTimeString(),
@@ -449,9 +515,11 @@ const CardRenderer: React.FC<CardRendererProps> = ({
       const newCards = new Map(prev);
       const card = newCards.get(event.message_id);
       if (card) {
+        const completionText = dynamicContentGenerator.current.generateProgressText(100);
         newCards.set(event.message_id, {
           ...card,
           status: 'completed',
+          content: `${card.content}\n\n${completionText}`,
           progress: 100
         });
       }
@@ -461,10 +529,11 @@ const CardRenderer: React.FC<CardRendererProps> = ({
   }, [addLog]);
 
   const handleStepStarted = useCallback((event: StepEvent) => {
+    const dynamicContent = dynamicContentGenerator.current.generateContent('STEP_STARTED', event);
     const cardData: CardData = {
       id: `step_${event.step_id}`,
       title: `📋 ${event.step_name || '未知步骤'}`,
-      content: event.description || '执行中...',
+      content: dynamicContent,
       status: 'executing',
       type: 'step',
       timestamp: new Date().toLocaleTimeString(),
@@ -480,10 +549,11 @@ const CardRenderer: React.FC<CardRendererProps> = ({
       const newCards = new Map(prev);
       const card = newCards.get(`step_${event.step_id}`);
       if (card) {
+        const completionText = dynamicContentGenerator.current.generateProgressText(100);
         newCards.set(`step_${event.step_id}`, {
           ...card,
           status: event.success ? 'completed' : 'error',
-          content: event.result || card.content,
+          content: `${card.content}\n\n${completionText}\n${event.result || ''}`,
           progress: 100
         });
       }
@@ -529,6 +599,16 @@ const CardRenderer: React.FC<CardRendererProps> = ({
       });
     }, 2500);
 
+    // 模拟消息内容更新
+    setTimeout(() => {
+      handleTextMessageContent({
+        event_type: 'TEXT_MESSAGE_CONTENT',
+        timestamp: Date.now(),
+        message_id: `${taskId}_msg`,
+        content: dynamicContentGenerator.current.generateContent('TEXT_MESSAGE_START', { role: 'assistant' })
+      });
+    }, 3000);
+
     // 模拟完成
     setTimeout(() => {
       handleStepFinished({
@@ -552,16 +632,19 @@ const CardRenderer: React.FC<CardRendererProps> = ({
         message_id: `${taskId}_msg`
       });
     }, 4000);
-  }, [addLog, handleStepStarted, handleToolCallStart, handleTextMessageStart, handleStepFinished, handleToolCallEnd, handleTextMessageEnd]);
+  }, [addLog, handleStepStarted, handleToolCallStart, handleTextMessageStart, handleTextMessageContent, handleStepFinished, handleToolCallEnd, handleTextMessageEnd]);
 
   const simulateStateUpdate = useCallback(() => {
     addLog('SIMULATE', '模拟状态更新');
+
+    const dynamicContent1 = dynamicContentGenerator.current.generateContent('STATE_DELTA', {});
+    const dynamicContent2 = dynamicContentGenerator.current.generateContent('STATE_DELTA', {});
 
     const mockState = {
       cards: {
         'state_card_1': {
           title: '🎯 状态驱动卡片',
-          content: '这是通过状态快照创建的卡片',
+          content: dynamicContent1,
           status: 'completed' as CardStatus,
           type: 'state',
           timestamp: new Date().toLocaleTimeString(),
@@ -569,7 +652,7 @@ const CardRenderer: React.FC<CardRendererProps> = ({
         },
         'state_card_2': {
           title: '📊 数据分析',
-          content: '分析用户行为数据中...',
+          content: dynamicContent2,
           status: 'executing' as CardStatus,
           type: 'analysis',
           timestamp: new Date().toLocaleTimeString(),
@@ -586,6 +669,7 @@ const CardRenderer: React.FC<CardRendererProps> = ({
 
     // 模拟增量更新
     setTimeout(() => {
+      const completionText = dynamicContentGenerator.current.generateProgressText(100);
       handleStateDelta({
         event_type: 'STATE_DELTA',
         timestamp: Date.now(),
@@ -593,7 +677,7 @@ const CardRenderer: React.FC<CardRendererProps> = ({
           cards: {
             'state_card_2': {
               status: 'completed' as CardStatus,
-              content: '数据分析完成！发现了有趣的用户行为模式。',
+              content: `${completionText}\n数据分析完成！发现了有趣的用户行为模式。`,
               progress: 100
             }
           }

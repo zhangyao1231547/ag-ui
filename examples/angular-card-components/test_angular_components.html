@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Angular AG-UI 卡片组件测试</title>
+    <script src="https://unpkg.com/@angular/core@17/bundles/core.umd.min.js"></script>
+    <script src="https://unpkg.com/@angular/common@17/bundles/common.umd.min.js"></script>
+    <script src="https://unpkg.com/@angular/platform-browser@17/bundles/platform-browser.umd.min.js"></script>
+    <script src="https://unpkg.com/@angular/platform-browser-dynamic@17/bundles/platform-browser-dynamic.umd.min.js"></script>
+    <script src="https://unpkg.com/@angular/animations@17/bundles/animations.umd.min.js"></script>
+    <script src="https://unpkg.com/@angular/animations@17/bundles/animations-browser.umd.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .ag-ui-card-renderer {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+        
+        .btn.primary {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .btn.danger {
+            background: #f44336;
+            color: white;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+        
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+        
+        .card.pending {
+            border-left: 4px solid #ff9800;
+        }
+        
+        .card.executing {
+            border-left: 4px solid #2196F3;
+            animation: pulse 2s infinite;
+        }
+        
+        .card.completed {
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .card.error {
+            border-left: 4px solid #f44336;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .card-status {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+        
+        .card-status.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .card-status.completed {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .card-status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .card-status.executing {
+            background: #cce5ff;
+            color: #004085;
+        }
+        
+        .card-content {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 15px;
+            white-space: pre-wrap;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #eee;
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            transition: width 0.3s ease;
+            border-radius: 2px;
+        }
+        
+        .card-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #999;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+        
+        .logs {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .logs h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        
+        .logs-container {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .log-entry {
+            margin-bottom: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .log-timestamp {
+            color: #666;
+            margin-right: 8px;
+        }
+        
+        .log-type {
+            font-weight: bold;
+            margin-right: 8px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="ag-ui-card-renderer">
+            <!-- 头部 -->
+            <div class="header">
+                <h1>🎯 Angular AG-UI 卡片组件</h1>
+                <p>基于AG-UI协议的Angular动态渲染示例 - 集成动态内容生成功能</p>
+            </div>
+
+            <!-- 控制面板 -->
+            <div class="controls">
+                <button class="btn primary" onclick="simulateTaskFlow()">模拟任务流程</button>
+                <button class="btn" onclick="simulateStateUpdate()">模拟状态更新</button>
+                <button class="btn" onclick="simulateToolCall()">模拟工具调用</button>
+                <button class="btn" onclick="simulateMessage()">模拟消息生成</button>
+                <button class="btn danger" onclick="clearCards()">清空卡片</button>
+                <div class="status connected">演示模式</div>
+            </div>
+
+            <!-- 卡片网格 -->
+            <div class="cards-grid" id="cardsGrid">
+                <!-- 卡片将在这里动态生成 -->
+            </div>
+
+            <!-- 日志面板 -->
+            <div class="logs">
+                <h3>🔍 动态内容生成日志</h3>
+                <div class="logs-container" id="logsContainer">
+                    <div class="log-entry">
+                        <span class="log-timestamp">[启动]</span>
+                        <span class="log-type" style="background: #e3f2fd; color: #1976d2;">INIT</span>
+                        <span>Angular AG-UI 卡片组件已加载，动态内容生成器已就绪</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 动态内容生成器类
+        class DynamicContentGenerator {
+            generateContent(eventType, data = {}) {
+                const contentTemplates = {
+                    'TOOL_CALL_START': [
+                        '🔧 正在启动工具调用...',
+                        '⚙️ 工具初始化中，请稍候...',
+                        '🛠️ 准备执行工具操作...',
+                        '🔨 工具调用准备就绪...'
+                    ],
+                    'TOOL_CALL_END': [
+                        '✅ 工具调用成功完成！',
+                        '🎉 工具执行完毕，结果已生成',
+                        '✨ 工具操作圆满结束',
+                        '🏆 工具调用任务达成！'
+                    ],
+                    'TEXT_MESSAGE_START': [
+                        '💭 AI正在思考中...',
+                        '🧠 智能分析进行中...',
+                        '✍️ 正在生成回复内容...',
+                        '🤖 AI助手正在工作...'
+                    ],
+                    'TEXT_MESSAGE_CONTENT': [
+                        '📝 内容生成中...',
+                        '⌨️ 正在输出文字...',
+                        '📄 文本内容更新中...',
+                        '💬 消息内容构建中...'
+                    ],
+                    'STEP_STARTED': [
+                        '🚀 新步骤启动！',
+                        '📋 执行计划中的下一步...',
+                        '⏭️ 进入新的处理阶段...',
+                        '🎯 开始执行任务步骤...'
+                    ],
+                    'STATE_DELTA': [
+                        '🔄 状态更新中...',
+                        '📊 数据同步进行中...',
+                        '🔃 界面状态刷新...',
+                        '⚡ 实时更新状态信息...'
+                    ]
+                };
+
+                const templates = contentTemplates[eventType] || ['📌 处理中...'];
+                const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
+                
+                if (data.tool_name) {
+                    return randomTemplate.replace('工具', data.tool_name);
+                }
+                
+                return randomTemplate;
+            }
+
+            generateProgressText(progress) {
+                if (progress === 0) {
+                    return '准备开始...';
+                } else if (progress < 25) {
+                    return '初始化中...';
+                } else if (progress < 50) {
+                    return '处理中...';
+                } else if (progress < 75) {
+                    return '即将完成...';
+                } else if (progress < 100) {
+                    return '最后阶段...';
+                } else {
+                    return '已完成！';
+                }
+            }
+
+            generateEncouragementText() {
+                const encouragements = [
+                    '💪 继续保持！',
+                    '🌟 表现出色！',
+                    '🚀 进展顺利！',
+                    '✨ 非常棒！',
+                    '🎯 目标明确！',
+                    '⚡ 效率很高！'
+                ];
+                return encouragements[Math.floor(Math.random() * encouragements.length)];
+            }
+        }
+
+        // 全局变量
+        const dynamicContentGenerator = new DynamicContentGenerator();
+        let cards = new Map();
+        let taskCounter = 0;
+
+        // 添加日志
+        function addLog(type, message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logsContainer = document.getElementById('logsContainer');
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            
+            const typeColors = {
+                'TOOL': 'background: #fff3cd; color: #856404;',
+                'MESSAGE': 'background: #d4edda; color: #155724;',
+                'STEP': 'background: #cce5ff; color: #004085;',
+                'UI': 'background: #f8d7da; color: #721c24;',
+                'SIMULATE': 'background: #e2e3e5; color: #383d41;',
+                'DYNAMIC': 'background: #d1ecf1; color: #0c5460;'
+            };
+            
+            logEntry.innerHTML = `
+                <span class="log-timestamp">[${timestamp}]</span>
+                <span class="log-type" style="${typeColors[type] || ''}"> ${type} </span>
+                <span>${message}</span>
+            `;
+            
+            logsContainer.appendChild(logEntry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        // 渲染卡片
+        function renderCards() {
+            const cardsGrid = document.getElementById('cardsGrid');
+            cardsGrid.innerHTML = '';
+            
+            cards.forEach(card => {
+                const cardElement = document.createElement('div');
+                cardElement.className = `card ${card.status}`;
+                cardElement.innerHTML = `
+                    <div class="card-header">
+                        <div class="card-title">${card.title}</div>
+                        <div class="card-status ${card.status}">${card.status}</div>
+                    </div>
+                    <div class="card-content">${card.content}</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${card.progress}%"></div>
+                    </div>
+                    <div class="card-meta">
+                        <span>类型: ${card.type}</span>
+                        <span>${card.timestamp}</span>
+                    </div>
+                `;
+                cardsGrid.appendChild(cardElement);
+            });
+        }
+
+        // 模拟任务流程
+        function simulateTaskFlow() {
+            addLog('SIMULATE', '开始模拟完整任务流程');
+            const taskId = `task_${++taskCounter}`;
+
+            // 步骤1: 开始步骤
+            setTimeout(() => {
+                const dynamicContent = dynamicContentGenerator.generateContent('STEP_STARTED');
+                const progressText = dynamicContentGenerator.generateProgressText(0);
+                
+                const stepCard = {
+                    id: `${taskId}_step`,
+                    title: '📋 数据收集步骤',
+                    content: `${dynamicContent}\n\n📊 状态: ${progressText}\n📝 描述: 正在收集用户数据...\n🆔 步骤ID: ${taskId}_step`,
+                    status: 'executing',
+                    type: 'step',
+                    timestamp: new Date().toLocaleTimeString(),
+                    progress: 0
+                };
+                
+                cards.set(stepCard.id, stepCard);
+                renderCards();
+                addLog('DYNAMIC', `生成动态内容: "${dynamicContent}"`);
+            }, 500);
+
+            // 步骤2: 工具调用
+            setTimeout(() => {
+                const dynamicContent = dynamicContentGenerator.generateContent('TOOL_CALL_START', { tool_name: 'data_processor' });
+                const progressText = dynamicContentGenerator.generateProgressText(0);
+                
+                const toolCard = {
+                    id: `${taskId}_tool`,
+                    title: '🔧 data_processor',
+                    content: `${dynamicContent}\n\n📊 状态: ${progressText}\n🛠️ 工具: data_processor\n📝 参数: {"input": "user_data"}`,
+                    status: 'executing',
+                    type: 'tool_call',
+                    timestamp: new Date().toLocaleTimeString(),
+                    progress: 0
+                };
+                
+                cards.set(toolCard.id, toolCard);
+                renderCards();
+                addLog('DYNAMIC', `生成动态内容: "${dynamicContent}"`);
+            }, 1500);
+
+            // 步骤3: 完成
+            setTimeout(() => {
+                const toolCard = cards.get(`${taskId}_tool`);
+                if (toolCard) {
+                    const dynamicContent = dynamicContentGenerator.generateContent('TOOL_CALL_END');
+                    const progressText = dynamicContentGenerator.generateProgressText(100);
+                    const encouragement = dynamicContentGenerator.generateEncouragementText();
+                    
+                    toolCard.status = 'completed';
+                    toolCard.content = `${dynamicContent}\n\n📊 状态: ${progressText}\n${encouragement}\n\n📋 执行结果:\n{"processed": 100, "status": "success"}`;
+                    toolCard.progress = 100;
+                    
+                    cards.set(toolCard.id, toolCard);
+                    renderCards();
+                    addLog('DYNAMIC', `生成完成内容: "${dynamicContent}" + "${encouragement}"`);
+                }
+            }, 3000);
+        }
+
+        // 模拟状态更新
+        function simulateStateUpdate() {
+            const dynamicContent = dynamicContentGenerator.generateContent('STATE_DELTA');
+            const progressText = dynamicContentGenerator.generateProgressText(65);
+            
+            const stateCard = {
+                id: 'state_update_demo',
+                title: '📊 状态驱动更新',
+                content: `${dynamicContent}\n\n📊 状态: ${progressText}\n📝 内容: 这是通过状态增量更新的卡片内容`,
+                status: 'executing',
+                type: 'analysis',
+                timestamp: new Date().toLocaleTimeString(),
+                progress: 65
+            };
+            
+            cards.set(stateCard.id, stateCard);
+            renderCards();
+            addLog('DYNAMIC', `生成状态更新内容: "${dynamicContent}"`);
+        }
+
+        // 模拟工具调用
+        function simulateToolCall() {
+            const toolName = ['file_reader', 'data_analyzer', 'report_generator'][Math.floor(Math.random() * 3)];
+            const dynamicContent = dynamicContentGenerator.generateContent('TOOL_CALL_START', { tool_name: toolName });
+            const progressText = dynamicContentGenerator.generateProgressText(0);
+            
+            const toolCard = {
+                id: `tool_${Date.now()}`,
+                title: `🔧 ${toolName}`,
+                content: `${dynamicContent}\n\n📊 状态: ${progressText}\n🛠️ 工具: ${toolName}\n📝 参数: {"mode": "auto"}`,
+                status: 'executing',
+                type: 'tool_call',
+                timestamp: new Date().toLocaleTimeString(),
+                progress: 0
+            };
+            
+            cards.set(toolCard.id, toolCard);
+            renderCards();
+            addLog('DYNAMIC', `生成工具调用内容: "${dynamicContent}"`);
+            
+            // 2秒后完成
+            setTimeout(() => {
+                const completedContent = dynamicContentGenerator.generateContent('TOOL_CALL_END');
+                const encouragement = dynamicContentGenerator.generateEncouragementText();
+                
+                toolCard.status = 'completed';
+                toolCard.content = `${completedContent}\n\n📊 状态: 已完成！\n${encouragement}\n\n📋 执行结果:\n{"success": true, "data": "processed"}`;
+                toolCard.progress = 100;
+                
+                cards.set(toolCard.id, toolCard);
+                renderCards();
+                addLog('DYNAMIC', `生成完成内容: "${completedContent}" + "${encouragement}"`);
+            }, 2000);
+        }
+
+        // 模拟消息生成
+        function simulateMessage() {
+            const dynamicContent = dynamicContentGenerator.generateContent('TEXT_MESSAGE_START');
+            const progressText = dynamicContentGenerator.generateProgressText(0);
+            
+            const messageCard = {
+                id: `msg_${Date.now()}`,
+                title: '💬 assistant 消息',
+                content: `${dynamicContent}\n\n📊 状态: ${progressText}\n👤 角色: assistant`,
+                status: 'executing',
+                type: 'message',
+                timestamp: new Date().toLocaleTimeString(),
+                progress: 0
+            };
+            
+            cards.set(messageCard.id, messageCard);
+            renderCards();
+            addLog('DYNAMIC', `生成消息开始内容: "${dynamicContent}"`);
+            
+            // 模拟内容更新
+            let progress = 20;
+            const updateInterval = setInterval(() => {
+                const contentDynamic = dynamicContentGenerator.generateContent('TEXT_MESSAGE_CONTENT');
+                const progressText = dynamicContentGenerator.generateProgressText(progress);
+                
+                messageCard.content = `${contentDynamic}\n\n📊 状态: ${progressText}\n\n💬 消息内容:\n正在生成智能回复，请稍候...`;
+                messageCard.progress = progress;
+                
+                cards.set(messageCard.id, messageCard);
+                renderCards();
+                
+                progress += 20;
+                if (progress >= 100) {
+                    clearInterval(updateInterval);
+                    messageCard.status = 'completed';
+                    messageCard.content = `✅ 消息生成完成！\n\n📊 状态: 已完成！\n\n💬 消息内容:\n您好！我是AI助手，很高兴为您服务。这是一条通过动态内容生成器创建的消息。`;
+                    messageCard.progress = 100;
+                    
+                    cards.set(messageCard.id, messageCard);
+                    renderCards();
+                    addLog('DYNAMIC', '消息生成完成');
+                }
+            }, 800);
+        }
+
+        // 清空卡片
+        function clearCards() {
+            cards.clear();
+            renderCards();
+            addLog('UI', '已清空所有卡片');
+        }
+
+        // 初始化
+        addLog('DYNAMIC', '动态内容生成器初始化完成，支持多种事件类型的智能内容生成');
+    </script>
+</body>
+</html>
